@@ -15,10 +15,22 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		databaseURL = "postgres://barterswap:barterswap@localhost:5432/barterswap?sslmode=disable"
+	}
+
+	db, err := openDB(databaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	a := &app{db: db}
 
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newRouter(),
+		Handler:           a.routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

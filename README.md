@@ -23,17 +23,34 @@ docker compose up --build
 
 ## Endpoints
 
+L'utilisateur courant est identifié par le header `X-User-ID` (pas
+d'authentification avancée, conformément au sujet).
+
 | Méthode | Path | Description |
 |---------|------|-------------|
 | GET | `/health` | État de l'API |
+| POST | `/api/users` | Créer un compte (10 crédits de bienvenue) |
+| GET | `/api/users/{id}` | Profil public (avec compétences et solde) |
+| PUT | `/api/users/{id}` | Modifier son profil |
+| GET | `/api/users/{id}/skills` | Compétences d'un utilisateur |
+| PUT | `/api/users/{id}/skills` | Définir ses compétences (écrase la liste) |
 
-*(Le tableau sera complété au fil de l'implémentation : users, skills,
-services, exchanges, reviews, stats — voir CLAUDE.md pour le plan.)*
+*(À venir : services, exchanges, reviews, stats — voir CLAUDE.md.)*
 
 ## Exemples d'utilisation
 
 ```bash
-curl http://localhost:8080/health
+# Créer un compte (10 crédits de bienvenue attribués automatiquement)
+curl -X POST http://localhost:8080/api/users \
+  -d '{"pseudo":"alice","bio":"Jardinière du dimanche","ville":"Paris"}'
+
+# Définir ses compétences (niveaux : débutant, intermédiaire, expert)
+curl -X PUT http://localhost:8080/api/users/1/skills \
+  -H "X-User-ID: 1" \
+  -d '[{"nom":"Jardinage","niveau":"expert"},{"nom":"Cuisine","niveau":"débutant"}]'
+
+# Consulter un profil (compétences + solde de crédits)
+curl http://localhost:8080/api/users/1
 ```
 
 ## Tests
