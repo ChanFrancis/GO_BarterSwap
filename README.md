@@ -78,7 +78,7 @@ internal/mailer/   Envoi d'emails via SMTP
 - [x] Sécurité CNIL : mot de passe fort (12+ caractères), expiration 60 jours, blocage après échecs
 - [ ] 2FA (TOTP) et OAuth2 (bonus)
 - [x] Métier : objets, offres de troc, échanges (reste : photos, messagerie)
-- [ ] Tests unitaires, fonctionnels et d'interface
+- [ ] Tests unitaires, fonctionnels et d'interface (CI : gofmt + vet + tests + build à chaque push)
 - [ ] Observabilité : santé des conteneurs, erreurs (Sentry/GlitchTip), analytique
 - [ ] Déploiement VPS : registre Docker, pare-feu, domaine + SSL
 - [ ] Sauvegardes 3-2-1 de la base de données
