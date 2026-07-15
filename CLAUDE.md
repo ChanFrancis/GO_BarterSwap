@@ -99,6 +99,18 @@ exportées, gofmt obligatoire, code et messages en français.
   `GET /api/services/{id}/reviews`
 - Stats : `GET /api/users/{id}/stats` (UserStats complet)
 
+## État d'avancement
+
+Toutes les fonctionnalités du sujet sont implémentées : users/skills,
+services (filtres serveur), exchanges (cycle de vie + crédits en journal de
+transactions), reviews, stats. Tests unitaires (validations, routage) +
+test d'intégration du parcours complet sur vraie base (skip si
+`TEST_DATABASE_URL` absent). Couverture ~64 %, CI avec PostgreSQL et seuil
+à 60 %.
+
+Reste surtout : préparation de la soutenance (script de démo curl couvrant
+les 12 cas), relecture qualité, éventuels bonus jury.
+
 ## Plan de travail (aligné sur le barème /20)
 
 1. **Socle** : schéma SQL, connexion `database/sql`, middlewares (X-User-ID,

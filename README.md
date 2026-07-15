@@ -110,6 +110,21 @@ curl -X PUT http://localhost:8080/api/exchanges/1/complete -H "X-User-ID: 2"
 
 ## Tests
 
+Tests unitaires (validations, routage) sans base :
+
 ```bash
 go test -v -cover ./...
 ```
+
+Tests d'intégration (parcours complet sur une vraie base) : ils se sautent
+si `TEST_DATABASE_URL` n'est pas défini. Exemple avec Docker :
+
+```bash
+docker run -d --name pg -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test \
+  -e POSTGRES_DB=test -p 55432:5432 postgres:17
+TEST_DATABASE_URL="postgres://test:test@localhost:55432/test?sslmode=disable" \
+  go test -cover ./...
+```
+
+La CI GitHub Actions exécute ces tests contre un service PostgreSQL et
+échoue si la couverture passe sous 60 %.
