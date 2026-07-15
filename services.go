@@ -112,14 +112,3 @@ func (a *app) handleDeleteService(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "annonce supprimée"})
 }
-
-// idAndCaller lit l'identifiant {id} du chemin et l'appelant (X-User-ID).
-func (a *app) idAndCaller(r *http.Request) (id, callerID int, err error) {
-	if id, err = pathID(r); err != nil {
-		return 0, 0, err
-	}
-	if callerID, err = currentUserID(r); err != nil {
-		return 0, 0, err
-	}
-	return id, callerID, nil
-}

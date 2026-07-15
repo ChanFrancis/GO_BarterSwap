@@ -47,26 +47,38 @@ docker run --rm -v "$PWD":/app -w /app golang:1.26 gofmt -l .
 Un seul package, mais une **séparation stricte des responsabilités par
 fichier** — la logique métier ne doit JAMAIS être dans un handler HTTP :
 
+Trois couches, nommées de façon cohérente : exposition HTTP (`<domaine>.go`),
+règles métier pures (`business.go`), accès données (`<domaine>_store.go`).
+
 ```
-main.go          Point d'entrée : config, connexion DB, démarrage serveur
-router.go        Déclaration des routes + helpers writeJSON/writeError
-middleware.go    X-User-ID, logging, recovery, CORS
-models.go        Structs User, Skill, Service, Exchange, CreditTransaction,
-                 Review, UserStats (tags JSON imposés par le sujet)
-users.go         Handlers HTTP users/skills (aucune règle métier)
-services.go      Handlers HTTP services
-exchanges.go     Handlers HTTP exchanges
-reviews.go       Handlers HTTP reviews + stats
-business.go      RÈGLES MÉTIER pures : validations, cycle de vie d'un
-                 échange, calculs de crédits (fonctions testables sans HTTP)
-store.go         Accès base de données (requêtes SQL, transactions)
-schema.sql       Schéma de la base (appliqué au démarrage)
-*_test.go        Tests table-driven (métier) + httptest (API)
+main.go            Point d'entrée : config, connexion DB, démarrage serveur
+router.go          Routes + helpers writeJSON/writeError/respondError
+middleware.go      X-User-ID, logging, recovery, CORS + helpers requête
+                   (currentUserID, pathID, idAndCaller)
+models.go          Structs du sujet (tags JSON imposés)
+business.go        RÈGLES MÉTIER pures : validations, statuts, sentinelles
+                   (fonctions testables sans HTTP ni base)
+db.go              Connexion, schéma embarqué, helpers partagés (balance,
+                   userExists)
+
+users.go     services.go     exchanges.go     reviews.go       ← handlers HTTP
+users_store.go services_store.go exchanges_store.go reviews_store.go ← accès données
+
+schema.sql         Schéma de la base (appliqué au démarrage)
+*_test.go          Tests table-driven (métier), httptest (API), intégration
 ```
 
-Conventions : stdlib uniquement, erreurs sentinelles (`ErrX = errors.New`) +
-`errors.Is`/`As`, wrapping avec `%w`, commentaires godoc sur les fonctions
-exportées, gofmt obligatoire, code et messages en français.
+Conventions (Module 8 du cours) : stdlib uniquement, visibilité par la casse
+(exporté = majuscule), commentaires godoc commençant par le nom de
+l'identifiant, erreurs sentinelles (`ErrX = errors.New`) + `errors.Is`/`As`,
+wrapping avec `%w`, gofmt obligatoire, code et messages en français.
+
+**Note pour la soutenance** — le cours (Module 8) présente une arborescence
+`cmd/`/`internal/`/`pkg/` avec des sous-packages. Le sujet l'interdit
+explicitement (« un seul package Go »), donc on applique le reste de la
+nomenclature (découpage par responsabilité et par couche, casse, godoc) au
+sein d'un unique `package main`. Le jury peut poser la question : la réponse
+est que la contrainte du sujet prime sur la structure multi-packages du cours.
 
 ## Règles métier des crédits (cœur de la notation « Fonctionnalités »)
 

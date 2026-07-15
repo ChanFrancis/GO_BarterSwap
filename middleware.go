@@ -66,3 +66,16 @@ func pathID(r *http.Request) (int, error) {
 	}
 	return id, nil
 }
+
+// idAndCaller lit à la fois l'identifiant {id} du chemin et l'appelant
+// (X-User-ID) : combinaison utilisée par les routes réservées au
+// propriétaire d'une ressource.
+func (a *app) idAndCaller(r *http.Request) (id, callerID int, err error) {
+	if id, err = pathID(r); err != nil {
+		return 0, 0, err
+	}
+	if callerID, err = currentUserID(r); err != nil {
+		return 0, 0, err
+	}
+	return id, callerID, nil
+}
