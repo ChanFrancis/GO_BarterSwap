@@ -3,6 +3,7 @@
 
 # Binaires
 /barterswap
+/GO_BarterSwap
 *.exe
 
 # Couverture de tests
