@@ -32,6 +32,25 @@ Règles CNIL appliquées : mot de passe de 12 caractères minimum avec lettres,
 chiffres et symboles ; blocage du compte 15 minutes après 5 échecs de
 connexion ; réinitialisation forcée si le mot de passe a plus de 60 jours.
 
+## API métier (troc)
+
+| Méthode | Route                      | Description                                              |
+|---------|----------------------------|----------------------------------------------------------|
+| GET     | `/api/items`               | Catalogue public (`?q=`, `?category=`, `?owner_id=`, `?page=`) |
+| GET     | `/api/items/{id}`          | Détail d'un objet                                        |
+| POST    | `/api/items` 🔒            | Créer un objet (`{"title","description","category","condition"}`) |
+| PUT     | `/api/items/{id}` 🔒       | Modifier son objet                                       |
+| DELETE  | `/api/items/{id}` 🔒       | Supprimer son objet                                      |
+| POST    | `/api/trades` 🔒           | Proposer un troc (`{"requested_item_id","offered_item_ids","message"}`) |
+| GET     | `/api/trades` 🔒           | Ses offres envoyées et reçues                            |
+| POST    | `/api/trades/{id}/accept` 🔒 | Accepter (propriétaire de l'objet demandé) : échange la propriété |
+| POST    | `/api/trades/{id}/decline` 🔒 | Refuser une offre reçue                                |
+| POST    | `/api/trades/{id}/cancel` 🔒 | Annuler une offre envoyée                               |
+
+🔒 = session requise. États d'objet acceptés : `neuf`, `très bon`, `bon`, `usé`.
+À l'acceptation d'un troc, la propriété des objets est échangée en transaction
+et les autres offres en attente sur ces objets sont automatiquement refusées.
+
 ## Lancer les tests
 
 ```bash
@@ -46,6 +65,8 @@ internal/config/   Chargement de la configuration (variables d'environnement)
 internal/server/   Construction du serveur HTTP, routes et middlewares
 internal/handlers/ Handlers HTTP (un fichier par domaine)
 internal/auth/     Logique d'authentification (hash argon2id, sessions, règles CNIL)
+internal/items/    Objets à troquer : validation, CRUD, recherche
+internal/trades/   Offres de troc : proposition, acceptation transactionnelle
 internal/database/ Connexion PostgreSQL et migrations SQL embarquées
 internal/mailer/   Envoi d'emails via SMTP
 ```
@@ -56,7 +77,7 @@ internal/mailer/   Envoi d'emails via SMTP
 - [x] Authentification : inscription, connexion, mot de passe oublié/réinitialisation
 - [x] Sécurité CNIL : mot de passe fort (12+ caractères), expiration 60 jours, blocage après échecs
 - [ ] 2FA (TOTP) et OAuth2 (bonus)
-- [ ] Métier : objets, offres de troc, échanges
+- [x] Métier : objets, offres de troc, échanges (reste : photos, messagerie)
 - [ ] Tests unitaires, fonctionnels et d'interface
 - [ ] Observabilité : santé des conteneurs, erreurs (Sentry/GlitchTip), analytique
 - [ ] Déploiement VPS : registre Docker, pare-feu, domaine + SSL

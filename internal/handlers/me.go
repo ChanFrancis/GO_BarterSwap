@@ -2,8 +2,8 @@ package handlers
 
 import "net/http"
 
-// Me confirme simplement que la session est valide ; il sera enrichi avec le
-// profil de l'utilisateur en Phase 2.
+// Me confirme que la session est valide et retourne l'identifiant de
+// l'utilisateur connecté.
 func Me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"message": "session valide"})
+	writeJSON(w, http.StatusOK, map[string]any{"user_id": UserID(r)})
 }

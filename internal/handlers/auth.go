@@ -120,11 +120,12 @@ func (a *Auth) RequireSession(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "authentification requise")
 			return
 		}
-		if _, err := a.Service.UserIDFromSession(r.Context(), cookie.Value); err != nil {
+		userID, err := a.Service.UserIDFromSession(r.Context(), cookie.Value)
+		if err != nil {
 			writeError(w, http.StatusUnauthorized, "session invalide ou expirée")
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(WithUserID(r.Context(), userID)))
 	})
 }
 
