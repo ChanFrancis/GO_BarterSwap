@@ -1,162 +1,144 @@
-# CLAUDE.md — BarterSwap
+# CLAUDE.md — BarterSwap (Projet de fin de module Go, Sujet-7)
 
 ## Contexte
 
-BarterSwap est une plateforme de troc (échange d'objets sans monnaie) réalisée
-pour le Projet Annuel ESGI (groupe de 3-4 personnes). Backend en Go, base
-PostgreSQL, tout tourne via Docker — **Go n'est pas installé en local**.
+BarterSwap est une **API d'échange de compétences entre particuliers** : une
+banque de temps où chaque heure de service rendue donne droit à une heure de
+service reçue, comptée en **crédits-temps**. Ce n'est ni une plateforme de
+freelance, ni du troc direct : les échanges sont différés via les crédits.
+
+Projet noté sur 20, soutenance de 10 min (6 min de démo curl en direct +
+4 min de questions/test de résilience). Groupe de 3. Le sujet complet est
+dans `../Sujet-7.pdf`.
+
+**Attention : ne pas confondre avec `Sujet-6.pdf` (Projet Annuel), qui est un
+autre cours.** Ici : pas de VPS, pas de SSL, pas d'authentification, pas
+d'infra de prod.
+
+## Contraintes STRICTES du sujet (éliminatoires si violées)
+
+- **Un seul package Go** (`package main` à la racine) — aucun sous-package.
+- **Une seule dépendance externe autorisée : le driver de base de données**
+  (lib/pq, pgx, go-sql-driver/mysql…). Rien d'autre, pas de x/crypto.
+- **Pas d'ORM** : `database/sql` de la stdlib uniquement.
+- **Pas de framework HTTP** (ni Gin, ni Echo, ni Chi) : `net/http` seul.
+- **Pas de mutex** : la base de données gère la concurrence.
+- **Pas d'authentification avancée** : l'utilisateur courant est identifié
+  par le header `X-User-ID`.
+- Filtres et recherche **côté serveur** (query parameters).
 
 ## Commandes
 
+Go n'est pas installé sur la machine : tout passe par Docker.
+
 ```bash
-# Lancer l'application (API + PostgreSQL)
+# Base de données + API
 cp .env.example .env && docker compose up --build
 
-# Tests / vet / build (toujours via Docker)
-docker run --rm -v "$PWD":/app -w /app golang:1.26 go test ./...
+# Tests, vet, format, couverture (exigence : ≥ 60 %)
+docker run --rm -u "$(id -u):$(id -g)" -e GOCACHE=/tmp/gocache -e GOPATH=/tmp/gopath \
+  -v "$PWD":/app -w /app golang:1.26 go test -v -cover ./...
 docker run --rm -v "$PWD":/app -w /app golang:1.26 go vet ./...
-docker run --rm -v "$PWD":/app -w /app golang:1.26 go build -buildvcs=false ./...
+docker run --rm -v "$PWD":/app -w /app golang:1.26 gofmt -l .
 ```
 
-## Architecture
+## Architecture (3 points au barème)
+
+Un seul package, mais une **séparation stricte des responsabilités par
+fichier** — la logique métier ne doit JAMAIS être dans un handler HTTP :
 
 ```
-cmd/server/        Point d'entrée
-internal/config/   Configuration via variables d'environnement (.env non commité)
-internal/server/   Construction du serveur HTTP et routage (net/http, Go 1.22+ patterns)
-internal/handlers/ Handlers HTTP, un fichier par domaine + test associé
+main.go          Point d'entrée : config, connexion DB, démarrage serveur
+router.go        Déclaration des routes + helpers writeJSON/writeError
+middleware.go    X-User-ID, logging, recovery, CORS
+models.go        Structs User, Skill, Service, Exchange, CreditTransaction,
+                 Review, UserStats (tags JSON imposés par le sujet)
+users.go         Handlers HTTP users/skills (aucune règle métier)
+services.go      Handlers HTTP services
+exchanges.go     Handlers HTTP exchanges
+reviews.go       Handlers HTTP reviews + stats
+business.go      RÈGLES MÉTIER pures : validations, cycle de vie d'un
+                 échange, calculs de crédits (fonctions testables sans HTTP)
+store.go         Accès base de données (requêtes SQL, transactions)
+schema.sql       Schéma de la base (appliqué au démarrage)
+*_test.go        Tests table-driven (métier) + httptest (API)
 ```
 
-Conventions : bibliothèque standard en priorité, dépendances minimales et
-justifiées, code et messages en français pour la documentation, chaque handler
-accompagné de son test `_test.go`.
+Conventions : stdlib uniquement, erreurs sentinelles (`ErrX = errors.New`) +
+`errors.Is`/`As`, wrapping avec `%w`, commentaires godoc sur les fonctions
+exportées, gofmt obligatoire, code et messages en français.
 
----
+## Règles métier des crédits (cœur de la notation « Fonctionnalités »)
 
-# Plan pour obtenir tous les points du sujet
+- Création de compte → **10 crédits de bienvenue**.
+- Les crédits sont un **journal de transactions** (`credit_transactions` :
+  montant positif = crédit, négatif = débit ; type `earn`/`spend`/`refund`),
+  le solde est la somme du journal — pas un simple champ.
+- `POST /api/exchanges` : refusé si le demandeur n'a pas assez de crédits
+  (400), si le service est le sien (400), ou si le service a déjà un échange
+  `pending`/`accepted` (409).
+- `accepted` → crédits **bloqués** (débités du demandeur, pas encore crédités
+  à l'offreur).
+- `completed` → crédits **transférés** à l'offreur.
+- `rejected`/`cancelled` → crédits **restitués** au demandeur.
+- Cycle de vie : `pending → accepted → completed`, avec `rejected` depuis
+  pending et `cancelled` depuis accepted (demandeur ou offreur).
+- Reviews : uniquement sur un échange `completed`, 1 seul avis par
+  utilisateur et par échange (400 sinon), note 1-5, ni modifiable ni
+  supprimable.
 
-## Phase 1 — Authentification & Sécurité (section « Sécurité »)
+## Endpoints imposés
 
-1. **Modèle utilisateur + migrations** : table `users` (email unique, hash
-   argon2id, dates de création/changement de mot de passe), migrations SQL
-   versionnées (golang-migrate).
-2. **Inscription** (`POST /api/register`) : validation email, mot de passe
-   fort obligatoire — **12 caractères minimum avec chiffres, lettres et
-   symboles** (règle CNIL), hash argon2id, jamais de mot de passe en clair.
-3. **Connexion** (`POST /api/login`) : sessions via cookie `HttpOnly`,
-   `Secure`, `SameSite=Strict` (ou JWT courte durée + refresh token).
-4. **Blocage des tentatives infructueuses** (règle CNIL) : compteur d'échecs
-   par compte + IP, verrouillage temporaire progressif après N échecs,
-   journalisation des tentatives.
-5. **Mot de passe oublié / réinitialisation** : token à usage unique, haché en
-   base, expiration courte (15-30 min), envoi par email (SMTP conteneurisé —
-   Mailpit en dev), réponse identique que l'email existe ou non.
-6. **Expiration du mot de passe à 60 jours** (règle CNIL) : à la connexion,
-   si `password_changed_at` > 60 jours → forcer la réinitialisation.
-7. **Durcissement transversal** : middleware de sécurité (en-têtes CSP,
-   X-Content-Type-Options, HSTS), rate limiting global, validation stricte
-   des entrées, requêtes SQL paramétrées uniquement.
+- Users : `POST /api/users`, `GET|PUT /api/users/{id}`,
+  `GET|PUT /api/users/{id}/skills` (PUT écrase toutes les skills)
+- Services : CRUD `/api/services` + filtres `?categorie=`, `?ville=`,
+  `?search=` (catégories : liste fermée de 13 valeurs, voir sujet p.4)
+- Exchanges : `POST|GET /api/exchanges`, `GET /api/exchanges/{id}`,
+  `PUT /api/exchanges/{id}/accept|reject|complete|cancel`, `?status=`
+- Reviews : `POST /api/exchanges/{id}/review`, `GET /api/users/{id}/reviews`,
+  `GET /api/services/{id}/reviews`
+- Stats : `GET /api/users/{id}/stats` (UserStats complet)
 
-## Phase 2 — Métier (section « Réponse Métier et Architecture »)
+## Plan de travail (aligné sur le barème /20)
 
-1. **Objets** : CRUD des objets à troquer (titre, description, catégorie,
-   état, photos uploadées), objets liés à leur propriétaire.
-2. **Offres de troc** : proposer un échange (mes objets X contre ton objet Y),
-   accepter / refuser / annuler, historique des échanges.
-3. **Recherche & catalogue** : liste paginée, filtres par catégorie, recherche
-   texte.
-4. **Messagerie entre troqueurs** (justifie le WebSocket demandé en infra) :
-   conversation par offre de troc.
-5. Architecture claire par domaine (`internal/items`, `internal/trades`,
-   `internal/auth`...) : pas de Clean Architecture imposée, mais séparation
-   handlers / logique métier / accès données, maintenable et lisible.
+1. **Socle** : schéma SQL, connexion `database/sql`, middlewares (X-User-ID,
+   logging, recovery, CORS), helpers JSON/erreurs. [Architecture 3 pts]
+2. **Users + skills** : création avec 10 crédits, profil, PUT skills qui
+   écrase. Premier jeu de tests table-driven + httptest. [Fonctionnalités]
+3. **Services** : CRUD (propriétaire uniquement), compétence requise pour
+   publier (400 sinon), filtres serveur categorie/ville/search.
+4. **Exchanges + crédits** : journal de transactions, cycle de vie complet,
+   toutes les règles ci-dessus **dans business.go**, transactions SQL pour
+   accept/complete/cancel. C'est le morceau le plus noté et le plus testé en
+   soutenance.
+5. **Reviews + stats** : contraintes d'unicité en base, agrégats SQL pour
+   UserStats.
+6. **Tests jusqu'à ≥ 60 % de couverture** [3 pts] : table-driven sur
+   business.go, httptest sur chaque endpoint, et les 12 cas métier listés
+   dans le sujet (p.9-10) comme checklist minimale.
+7. **Gestion d'erreurs** [1 pt] : sentinelles → codes HTTP cohérents
+   (400 validation, 403 pas le propriétaire, 404 introuvable, 409 conflit de
+   réservation), messages JSON clairs.
+8. **README** [1 pt] : format imposé par le sujet — Installation
+   (`go mod tidy && go run .`), tableau des endpoints, 3-4 exemples curl
+   complets, section tests (`go test -v -cover ./...`).
+9. **Préparation soutenance** : script de démo curl (cas nominaux + cas
+   d'erreur), chacun des 3 membres sait expliquer chaque couche. [Bonus jury
+   5 pts : originalité, dépassement — la CI GitHub Actions existante y
+   contribue]
 
-## Phase 3 — Frontend, Design & Accessibilité
+## Les 12 cas métier du sujet (checklist de démo et de tests)
 
-1. **Client web** (framework au choix du groupe, ou templates Go + HTMX) :
-   parcours complet inscription → dépôt d'objet → offre → échange.
-2. **Accessibilité** : HTML sémantique, labels sur tous les champs, contraste
-   suffisant, navigation clavier, attributs ARIA — viser un audit Lighthouse
-   accessibilité > 90.
-3. **SEO / robots** : balises meta, sitemap.xml, robots.txt, URLs propres.
-4. **UX** : messages d'erreur clairs, états de chargement, responsive.
+1. Créer un utilisateur → 201 · 2. Pseudo vide → 400 · 3. Publier un service
+sans avoir la compétence → 400 · 4. Échange sur son propre service → 400 ·
+5. Échange sans crédits suffisants → 400 · 6. Échange sur un service déjà
+réservé → 409 · 7. Accepter → crédits bloqués, statut `accepted` ·
+8. Compléter → crédits transférés, statut `completed` · 9. Annuler → crédits
+restitués · 10. Noter un échange non terminé → 400 · 11. Noter deux fois →
+400 · 12. Stats → valeurs cohérentes.
 
-## Phase 4 — Tests (section « Tests »)
+## Rendu
 
-1. **Unitaires** : logique métier (validation mot de passe, règles de troc),
-   handlers avec `httptest` — déjà démarré avec `health_test.go`.
-2. **Fonctionnels** : tests d'intégration API avec base PostgreSQL éphémère
-   (testcontainers-go ou compose de test) couvrant les parcours complets
-   (inscription → connexion → troc).
-3. **Interface** : tests end-to-end avec Playwright sur les parcours
-   critiques.
-4. **CI GitHub Actions** : `go vet` + tests + build Docker à chaque push —
-   prouve la régularité et la qualité au correcteur.
-
-## Phase 5 — Infrastructure (section « Infrastructure »)
-
-1. **VPS** (Hetzner, OVH, Scaleway...) avec Docker installé via IaC.
-2. **Reverse proxy** : Caddy ou Traefik en conteneur — domaine public +
-   **certificat SSL Let's Encrypt automatique** (autorité de confiance).
-3. **Pare-feu** : UFW ou nftables, seuls 22/80/443 ouverts, SSH par clé
-   uniquement — configuré par IaC pour le prouver.
-4. **Registre Docker** : GitHub Container Registry (ghcr.io) — les images
-   sont buildées en CI puis tirées par le VPS.
-5. **WebSocket** : servi par l'API Go pour la messagerie (Phase 2), passe par
-   le reverse proxy.
-6. **IaC obligatoire** : Dockerfile (fait) + Ansible (provisioning VPS :
-   pare-feu, Docker, déploiement) ou Terraform (création du VPS). Tout doit
-   être reproductible depuis le repo.
-
-## Phase 6 — Observabilité (section « Observabilité »)
-
-1. **Santé des conteneurs** : Uptime Kuma en conteneur qui surveille
-   `/health` de l'API + la base (le endpoint existe déjà).
-2. **Erreurs** : GlitchTip auto-hébergé (compatible SDK Sentry, gratuit) ;
-   intégrer le SDK Sentry-Go dans l'API.
-3. **Analytique** : Plausible auto-hébergé sur le client web (léger, RGPD).
-
-## Phase 7 — Sauvegardes 3-2-1 (section « Politique de recouvrement »)
-
-1. `pg_dump` quotidien via conteneur cron + sauvegarde des fichiers uploadés.
-2. **3 copies, 2 médiums, 1 externe** : (1) disque du VPS, (2) Volume/Block
-   Storage du provider, (3) bucket S3 externe chez un autre cloud
-   (Backblaze B2, AWS...) — chiffrées (restic ou rclone + age).
-3. **Tester la restauration** et documenter la procédure dans `docs/`.
-
-## Phase 8 — Gestion de projet (notée à chaque séance de suivi)
-
-1. **GitHub Projects** : backlog reprenant ce plan, colonnes To do / In
-   progress / Done, issues assignées.
-2. **Répartition équitable** : chaque membre a des issues à son nom, travail
-   via branches + Pull Requests reviewées.
-3. **Régularité** : commits fréquents de tout le monde (l'historique `.git`
-   est livré et audité), pas de gros dump la veille de la séance.
-
-## Phase 9 — Bonus (points supplémentaires)
-
-- **Authentification avancée** : OAuth2/OIDC Google + lien magique par email,
-  et **2FA TOTP** (compatible Google/Microsoft Authenticator) — bonus le plus
-  rentable, s'appuie sur la Phase 1.
-- **RGPD** : pages CGU/CGV/Contact, bannière cookies, politique de
-  confidentialité, export/suppression des données du compte.
-- **Application mobile** : client Capacitor réutilisant le front web
-  (obligation : app native installable ; store facultatif).
-- **Auto-hébergement/réplication** (si matériel disponible) : Proxmox + k3s
-  ou Docker Swarm, 2 répliques par service, CloudFlare Tunnel.
-
-## Livrables finaux (Contraintes)
-
-- Archive du repo **avec le dossier `.git`** (contributions individuelles
-  visibles) uploadée sur MyGES.
-- Documentation permettant de reproduire le projet en local (README) **et**
-  l'infrastructure (IaC + docs/).
-- Code propre : `go vet` sans erreur, nommage cohérent, fonctions courtes.
-
-## Ordre de travail recommandé
-
-Phase 1 → 2 → 4 (en continu dès maintenant) → 3 → 5 → 6 → 7, avec la Phase 8
-(gestion de projet) dès aujourd'hui et les bonus en fin de parcours. Mettre en
-production (Phase 5) tôt, même avec peu de fonctionnalités : le déploiement
-continu prouve la régularité et évite les mauvaises surprises de la dernière
-semaine.
+- Dépôt Git complet **avec l'historique** (dossier `.git` inclus).
+- Jamais d'attribution Claude dans les commits.
+- Contributions des 3 membres visibles dans l'historique.

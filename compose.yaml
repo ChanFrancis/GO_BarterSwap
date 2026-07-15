@@ -6,25 +6,14 @@ services:
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://barterswap:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans .env}@db:5432/barterswap?sslmode=disable
-      SMTP_ADDR: mailpit:1025
-      EMAIL_FROM: no-reply@barterswap.local
-      APP_URL: http://localhost:8080
-      SECURE_COOKIE: "false"
     depends_on:
       db:
         condition: service_healthy
-      mailpit:
-        condition: service_started
-
-  # Serveur SMTP de développement : les emails envoyés sont consultables
-  # sur http://localhost:8025
-  mailpit:
-    image: axllent/mailpit
-    ports:
-      - "8025:8025"
 
   db:
     image: postgres:17
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: barterswap
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans .env}
