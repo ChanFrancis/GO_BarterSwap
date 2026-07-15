@@ -21,7 +21,17 @@ var (
 	ErrCreditsInsuffisants = errors.New("crédits insuffisants pour lancer cet échange")
 	ErrDejaReserve         = errors.New("ce service a déjà un échange en cours")
 	ErrTransitionInvalide  = errors.New("cette action n'est pas possible dans l'état actuel de l'échange")
+	ErrEchangeNonTermine   = errors.New("on ne peut noter qu'un échange terminé")
+	ErrDejaNote            = errors.New("vous avez déjà noté cet échange")
 )
+
+// validerNote vérifie qu'une note d'évaluation est comprise entre 1 et 5.
+func validerNote(note int) error {
+	if note < 1 || note > 5 {
+		return ValidationError{"la note doit être comprise entre 1 et 5"}
+	}
+	return nil
+}
 
 // Statuts d'un échange et cycle de vie :
 //

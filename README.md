@@ -46,8 +46,13 @@ d'authentification avancée, conformément au sujet).
 | PUT | `/api/exchanges/{id}/reject` | Refuser (offreur) une demande en attente |
 | PUT | `/api/exchanges/{id}/complete` | Terminer : transfère les crédits à l'offreur |
 | PUT | `/api/exchanges/{id}/cancel` | Annuler : restitue les crédits bloqués |
+| POST | `/api/exchanges/{id}/review` | Noter un échange terminé (`{"note":1-5,"commentaire":"…"}`) |
+| GET | `/api/users/{id}/reviews` | Avis reçus par un utilisateur |
+| GET | `/api/services/{id}/reviews` | Avis portant sur un service |
+| GET | `/api/users/{id}/stats` | Tableau de bord d'un utilisateur |
 
-*(À venir : reviews, stats — voir CLAUDE.md.)*
+Un avis n'est possible que sur un échange terminé, une seule fois par
+utilisateur et par échange, et ne peut être ni modifié ni supprimé.
 
 ### Crédits-temps et cycle de vie d'un échange
 

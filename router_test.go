@@ -75,6 +75,14 @@ func TestRoutes(t *testing.T) {
 			"", nil, http.StatusBadRequest},
 		{"accepter un id non numérique → 400", http.MethodPut, "/api/exchanges/abc/accept",
 			"", map[string]string{"X-User-ID": "1"}, http.StatusBadRequest},
+		{"noter sans X-User-ID → 400", http.MethodPost, "/api/exchanges/1/review",
+			`{"note":5}`, nil, http.StatusBadRequest},
+		{"noter avec une note hors bornes → 400", http.MethodPost, "/api/exchanges/1/review",
+			`{"note":9}`, map[string]string{"X-User-ID": "1"}, http.StatusBadRequest},
+		{"avis d'un service id non numérique → 400", http.MethodGet, "/api/services/abc/reviews",
+			"", nil, http.StatusBadRequest},
+		{"stats id non numérique → 400", http.MethodGet, "/api/users/abc/stats",
+			"", nil, http.StatusBadRequest},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -55,6 +55,29 @@ func TestValiderService(t *testing.T) {
 	}
 }
 
+func TestValiderNote(t *testing.T) {
+	cases := []struct {
+		note   int
+		valide bool
+	}{{0, false}, {1, true}, {3, true}, {5, true}, {6, false}, {-1, false}}
+	for _, c := range cases {
+		if err := validerNote(c.note); (err == nil) != c.valide {
+			t.Errorf("note %d : validité attendue %v, err=%v", c.note, c.valide, err)
+		}
+	}
+}
+
+func TestStatutValide(t *testing.T) {
+	for _, s := range []string{"pending", "accepted", "rejected", "cancelled", "completed"} {
+		if !statutValide(s) {
+			t.Errorf("%q devrait être un statut valide", s)
+		}
+	}
+	if statutValide("zzz") {
+		t.Error("zzz ne devrait pas être valide")
+	}
+}
+
 func TestValiderSkills(t *testing.T) {
 	cases := []struct {
 		name   string

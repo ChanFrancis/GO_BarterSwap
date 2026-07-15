@@ -34,6 +34,11 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("PUT /api/exchanges/{id}/complete", a.handleCompleteExchange)
 	mux.HandleFunc("PUT /api/exchanges/{id}/cancel", a.handleCancelExchange)
 
+	mux.HandleFunc("POST /api/exchanges/{id}/review", a.handleCreateReview)
+	mux.HandleFunc("GET /api/users/{id}/reviews", a.handleUserReviews)
+	mux.HandleFunc("GET /api/services/{id}/reviews", a.handleServiceReviews)
+	mux.HandleFunc("GET /api/users/{id}/stats", a.handleUserStats)
+
 	return withMiddlewares(mux)
 }
 
@@ -64,7 +69,9 @@ func respondError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrCompetenceManquante),
 		errors.Is(err, ErrServicePropre),
-		errors.Is(err, ErrCreditsInsuffisants):
+		errors.Is(err, ErrCreditsInsuffisants),
+		errors.Is(err, ErrEchangeNonTermine),
+		errors.Is(err, ErrDejaNote):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrDejaReserve),
 		errors.Is(err, ErrTransitionInvalide):
