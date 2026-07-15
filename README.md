@@ -34,8 +34,18 @@ d'authentification avancée, conformément au sujet).
 | PUT | `/api/users/{id}` | Modifier son profil |
 | GET | `/api/users/{id}/skills` | Compétences d'un utilisateur |
 | PUT | `/api/users/{id}/skills` | Définir ses compétences (écrase la liste) |
+| GET | `/api/services` | Annonces actives (filtres `?categorie=`, `?ville=`, `?search=`) |
+| POST | `/api/services` | Publier une annonce (compétence requise dans la catégorie) |
+| GET | `/api/services/{id}` | Détail d'une annonce |
+| PUT | `/api/services/{id}` | Modifier son annonce |
+| DELETE | `/api/services/{id}` | Supprimer son annonce |
 
-*(À venir : services, exchanges, reviews, stats — voir CLAUDE.md.)*
+*(À venir : exchanges, reviews, stats — voir CLAUDE.md.)*
+
+Catégories acceptées : Informatique, Jardinage, Bricolage, Cuisine, Musique,
+Langues, Sport, Tutorat, Déménagement, Photographie, Animalier, Couture, Autre.
+On ne peut publier un service que dans une catégorie où l'on a déclaré une
+compétence de même nom.
 
 ## Exemples d'utilisation
 
@@ -51,6 +61,14 @@ curl -X PUT http://localhost:8080/api/users/1/skills \
 
 # Consulter un profil (compétences + solde de crédits)
 curl http://localhost:8080/api/users/1
+
+# Publier un service (nécessite une compétence dans la catégorie)
+curl -X POST http://localhost:8080/api/services \
+  -H "X-User-ID: 1" \
+  -d '{"titre":"Cours de piano","categorie":"Musique","duree_minutes":60,"credits":2,"ville":"Lyon"}'
+
+# Rechercher des services
+curl "http://localhost:8080/api/services?categorie=Musique&search=piano"
 ```
 
 ## Tests

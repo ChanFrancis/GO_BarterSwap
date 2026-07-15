@@ -14,8 +14,9 @@ const CreditsBienvenue = 10
 
 // Erreurs sentinelles, traduites en codes HTTP par respondError.
 var (
-	ErrIntrouvable = errors.New("ressource introuvable")
-	ErrInterdit    = errors.New("action réservée au propriétaire de la ressource")
+	ErrIntrouvable         = errors.New("ressource introuvable")
+	ErrInterdit            = errors.New("action réservée au propriétaire de la ressource")
+	ErrCompetenceManquante = errors.New("vous ne possédez pas de compétence correspondant à cette catégorie")
 )
 
 // ValidationError signale une entrée utilisateur invalide (HTTP 400).
@@ -25,6 +26,45 @@ func (e ValidationError) Error() string { return e.Message }
 
 // Niveaux de compétence acceptés.
 var niveauxValides = []string{"débutant", "intermédiaire", "expert"}
+
+// Catégories de service acceptées (liste fermée du sujet).
+var categoriesValides = []string{
+	"Informatique", "Jardinage", "Bricolage", "Cuisine", "Musique",
+	"Langues", "Sport", "Tutorat", "Déménagement", "Photographie",
+	"Animalier", "Couture", "Autre",
+}
+
+// serviceInput porte les champs modifiables d'une annonce de service.
+type serviceInput struct {
+	Titre        string `json:"titre"`
+	Description  string `json:"description"`
+	Categorie    string `json:"categorie"`
+	DureeMinutes int    `json:"duree_minutes"`
+	Credits      int    `json:"credits"`
+	Ville        string `json:"ville"`
+}
+
+// validerService vérifie les champs d'une annonce (hors contrôle de
+// compétence, qui nécessite la base).
+func validerService(in serviceInput) error {
+	if strings.TrimSpace(in.Titre) == "" {
+		return ValidationError{"le titre est obligatoire"}
+	}
+	if len([]rune(in.Titre)) > 120 {
+		return ValidationError{"le titre ne doit pas dépasser 120 caractères"}
+	}
+	if !contient(categoriesValides, in.Categorie) {
+		return ValidationError{fmt.Sprintf(
+			"catégorie %q invalide (attendu : %s)", in.Categorie, strings.Join(categoriesValides, ", "))}
+	}
+	if in.DureeMinutes <= 0 {
+		return ValidationError{"la durée doit être supérieure à zéro"}
+	}
+	if in.Credits <= 0 {
+		return ValidationError{"le coût en crédits doit être supérieur à zéro"}
+	}
+	return nil
+}
 
 // validerPseudo vérifie le pseudo d'un utilisateur.
 func validerPseudo(pseudo string) error {

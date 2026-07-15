@@ -20,6 +20,12 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("GET /api/users/{id}/skills", a.handleGetSkills)
 	mux.HandleFunc("PUT /api/users/{id}/skills", a.handlePutSkills)
 
+	mux.HandleFunc("GET /api/services", a.handleListServices)
+	mux.HandleFunc("POST /api/services", a.handleCreateService)
+	mux.HandleFunc("GET /api/services/{id}", a.handleGetService)
+	mux.HandleFunc("PUT /api/services/{id}", a.handleUpdateService)
+	mux.HandleFunc("DELETE /api/services/{id}", a.handleDeleteService)
+
 	return withMiddlewares(mux)
 }
 
@@ -48,6 +54,8 @@ func respondError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrInterdit):
 		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, ErrCompetenceManquante):
+		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		log.Printf("erreur interne : %v", err)
 		writeError(w, http.StatusInternalServerError, "erreur interne")

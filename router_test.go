@@ -54,6 +54,15 @@ func TestRoutes(t *testing.T) {
 			"", nil, http.StatusMethodNotAllowed},
 		{"preflight CORS → 204", http.MethodOptions, "/api/users",
 			"", nil, http.StatusNoContent},
+		{"créer un service sans X-User-ID → 400", http.MethodPost, "/api/services",
+			`{"titre":"x","categorie":"Musique","duree_minutes":60,"credits":2}`, nil, http.StatusBadRequest},
+		{"créer un service catégorie invalide → 400", http.MethodPost, "/api/services",
+			`{"titre":"x","categorie":"Astrologie","duree_minutes":60,"credits":2}`,
+			map[string]string{"X-User-ID": "1"}, http.StatusBadRequest},
+		{"service id non numérique → 400", http.MethodGet, "/api/services/abc",
+			"", nil, http.StatusBadRequest},
+		{"supprimer un service sans X-User-ID → 400", http.MethodDelete, "/api/services/1",
+			"", nil, http.StatusBadRequest},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

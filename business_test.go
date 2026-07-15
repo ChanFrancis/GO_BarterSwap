@@ -26,6 +26,35 @@ func TestValiderPseudo(t *testing.T) {
 	}
 }
 
+func TestValiderService(t *testing.T) {
+	valide := serviceInput{Titre: "Cours de piano", Categorie: "Musique", DureeMinutes: 60, Credits: 2}
+
+	cases := []struct {
+		name   string
+		mutate func(*serviceInput)
+		valide bool
+	}{
+		{"valide", func(in *serviceInput) {}, true},
+		{"titre vide", func(in *serviceInput) { in.Titre = "  " }, false},
+		{"catégorie hors liste", func(in *serviceInput) { in.Categorie = "Astrologie" }, false},
+		{"durée nulle", func(in *serviceInput) { in.DureeMinutes = 0 }, false},
+		{"crédits négatifs", func(in *serviceInput) { in.Credits = -1 }, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in := valide
+			c.mutate(&in)
+			err := validerService(in)
+			if c.valide && err != nil {
+				t.Errorf("attendu valide, reçu %v", err)
+			}
+			if !c.valide && err == nil {
+				t.Error("attendu une erreur, reçu nil")
+			}
+		})
+	}
+}
+
 func TestValiderSkills(t *testing.T) {
 	cases := []struct {
 		name   string
