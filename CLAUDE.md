@@ -64,9 +64,15 @@ db.go              Connexion, schéma embarqué, helpers partagés (balance,
 users.go     services.go     exchanges.go     reviews.go       ← handlers HTTP
 users_store.go services_store.go exchanges_store.go reviews_store.go ← accès données
 
-schema.sql         Schéma de la base (appliqué au démarrage)
 *_test.go          Tests table-driven (métier), httptest (API), intégration
+
+db/schema.sql      Schéma de la base (embarqué via go:embed, appliqué au démarrage)
+scripts/demo.sh    Script de démonstration des 12 cas métier (soutenance)
 ```
+
+Seuls les fichiers **non-Go** sont rangés en dossiers (`db/`, `scripts/`) :
+en Go un dossier = un package, donc les `.go` doivent tous rester à la racine
+pour respecter la contrainte « un seul package » (séparation par fichiers).
 
 Conventions (Module 8 du cours) : stdlib uniquement, visibilité par la casse
 (exporté = majuscule), commentaires godoc commençant par le nom de

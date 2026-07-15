@@ -9,7 +9,7 @@ import (
 	_ "github.com/lib/pq" // driver PostgreSQL (seule dépendance externe autorisée)
 )
 
-//go:embed schema.sql
+//go:embed db/schema.sql
 var schemaSQL string
 
 // app porte les dépendances partagées par les handlers.

@@ -110,12 +110,13 @@ curl -X PUT http://localhost:8080/api/exchanges/1/complete -H "X-User-ID: 2"
 
 ## Démonstration
 
-Le script [`demo.sh`](demo.sh) déroule les 12 cas métier du sujet (cas
-nominaux et cas d'erreur) et affiche chaque code HTTP. Sur une base fraîche :
+Le script [`scripts/demo.sh`](scripts/demo.sh) déroule les 12 cas métier du
+sujet (cas nominaux et cas d'erreur) et affiche chaque code HTTP. Sur une base
+fraîche :
 
 ```bash
 docker compose down -v && docker compose up --build -d
-./demo.sh
+./scripts/demo.sh
 ```
 
 ## Tests
