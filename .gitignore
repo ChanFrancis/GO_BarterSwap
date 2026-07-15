@@ -1,0 +1,13 @@
+# Secrets et configuration locale
+.env
+
+# Binaires
+/barterswap
+*.exe
+
+# Couverture de tests
+*.out
+
+# IDE
+.idea/
+.vscode/
