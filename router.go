@@ -26,6 +26,14 @@ func (a *app) routes() http.Handler {
 	mux.HandleFunc("PUT /api/services/{id}", a.handleUpdateService)
 	mux.HandleFunc("DELETE /api/services/{id}", a.handleDeleteService)
 
+	mux.HandleFunc("POST /api/exchanges", a.handleCreateExchange)
+	mux.HandleFunc("GET /api/exchanges", a.handleListExchanges)
+	mux.HandleFunc("GET /api/exchanges/{id}", a.handleGetExchange)
+	mux.HandleFunc("PUT /api/exchanges/{id}/accept", a.handleAcceptExchange)
+	mux.HandleFunc("PUT /api/exchanges/{id}/reject", a.handleRejectExchange)
+	mux.HandleFunc("PUT /api/exchanges/{id}/complete", a.handleCompleteExchange)
+	mux.HandleFunc("PUT /api/exchanges/{id}/cancel", a.handleCancelExchange)
+
 	return withMiddlewares(mux)
 }
 
@@ -54,8 +62,13 @@ func respondError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrInterdit):
 		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, ErrCompetenceManquante):
+	case errors.Is(err, ErrCompetenceManquante),
+		errors.Is(err, ErrServicePropre),
+		errors.Is(err, ErrCreditsInsuffisants):
 		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, ErrDejaReserve),
+		errors.Is(err, ErrTransitionInvalide):
+		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("erreur interne : %v", err)
 		writeError(w, http.StatusInternalServerError, "erreur interne")

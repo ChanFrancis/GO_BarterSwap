@@ -17,7 +17,33 @@ var (
 	ErrIntrouvable         = errors.New("ressource introuvable")
 	ErrInterdit            = errors.New("action réservée au propriétaire de la ressource")
 	ErrCompetenceManquante = errors.New("vous ne possédez pas de compétence correspondant à cette catégorie")
+	ErrServicePropre       = errors.New("impossible de demander un échange sur son propre service")
+	ErrCreditsInsuffisants = errors.New("crédits insuffisants pour lancer cet échange")
+	ErrDejaReserve         = errors.New("ce service a déjà un échange en cours")
+	ErrTransitionInvalide  = errors.New("cette action n'est pas possible dans l'état actuel de l'échange")
 )
+
+// Statuts d'un échange et cycle de vie :
+//
+//	pending → accepted → completed
+//	   ↓          ↓
+//	rejected   cancelled
+const (
+	StatusPending   = "pending"
+	StatusAccepted  = "accepted"
+	StatusRejected  = "rejected"
+	StatusCancelled = "cancelled"
+	StatusCompleted = "completed"
+)
+
+var statutsExchange = []string{
+	StatusPending, StatusAccepted, StatusRejected, StatusCancelled, StatusCompleted,
+}
+
+// statutValide indique si une valeur de filtre ?status= est reconnue.
+func statutValide(s string) bool {
+	return contient(statutsExchange, s)
+}
 
 // ValidationError signale une entrée utilisateur invalide (HTTP 400).
 type ValidationError struct{ Message string }

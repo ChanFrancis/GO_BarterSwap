@@ -63,6 +63,18 @@ func TestRoutes(t *testing.T) {
 			"", nil, http.StatusBadRequest},
 		{"supprimer un service sans X-User-ID → 400", http.MethodDelete, "/api/services/1",
 			"", nil, http.StatusBadRequest},
+		{"créer un échange sans X-User-ID → 400", http.MethodPost, "/api/exchanges",
+			`{"service_id":1}`, nil, http.StatusBadRequest},
+		{"créer un échange sans service_id → 400", http.MethodPost, "/api/exchanges",
+			`{}`, map[string]string{"X-User-ID": "1"}, http.StatusBadRequest},
+		{"lister ses échanges sans X-User-ID → 400", http.MethodGet, "/api/exchanges",
+			"", nil, http.StatusBadRequest},
+		{"filtre de statut inconnu → 400", http.MethodGet, "/api/exchanges?status=zzz",
+			"", map[string]string{"X-User-ID": "1"}, http.StatusBadRequest},
+		{"accepter sans X-User-ID → 400", http.MethodPut, "/api/exchanges/1/accept",
+			"", nil, http.StatusBadRequest},
+		{"accepter un id non numérique → 400", http.MethodPut, "/api/exchanges/abc/accept",
+			"", map[string]string{"X-User-ID": "1"}, http.StatusBadRequest},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -142,13 +142,23 @@ func (a *app) replaceSkills(ctx context.Context, userID int, skills []Skill) err
 	return tx.Commit()
 }
 
-// creditBalance calcule le solde comme la somme du journal de transactions.
-func (a *app) creditBalance(ctx context.Context, userID int) (int, error) {
+// rowQuerier couvre *sql.DB et *sql.Tx pour partager les calculs de solde.
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// balance calcule le solde comme la somme du journal de transactions.
+func balance(ctx context.Context, q rowQuerier, userID int) (int, error) {
 	var solde int
-	err := a.db.QueryRowContext(ctx,
+	err := q.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(montant), 0) FROM credit_transactions WHERE user_id = $1`,
 		userID).Scan(&solde)
 	return solde, err
+}
+
+// creditBalance calcule le solde d'un utilisateur (hors transaction).
+func (a *app) creditBalance(ctx context.Context, userID int) (int, error) {
+	return balance(ctx, a.db, userID)
 }
 
 // userHasSkill indique si l'utilisateur possède une compétence dont le nom

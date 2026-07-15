@@ -39,8 +39,33 @@ d'authentification avancée, conformément au sujet).
 | GET | `/api/services/{id}` | Détail d'une annonce |
 | PUT | `/api/services/{id}` | Modifier son annonce |
 | DELETE | `/api/services/{id}` | Supprimer son annonce |
+| POST | `/api/exchanges` | Demander un échange (`{"service_id":N}`) |
+| GET | `/api/exchanges` | Ses échanges (demandés + reçus, filtre `?status=`) |
+| GET | `/api/exchanges/{id}` | Détail d'un échange |
+| PUT | `/api/exchanges/{id}/accept` | Accepter (offreur) : bloque les crédits |
+| PUT | `/api/exchanges/{id}/reject` | Refuser (offreur) une demande en attente |
+| PUT | `/api/exchanges/{id}/complete` | Terminer : transfère les crédits à l'offreur |
+| PUT | `/api/exchanges/{id}/cancel` | Annuler : restitue les crédits bloqués |
 
-*(À venir : exchanges, reviews, stats — voir CLAUDE.md.)*
+*(À venir : reviews, stats — voir CLAUDE.md.)*
+
+### Crédits-temps et cycle de vie d'un échange
+
+```
+pending ──accept──► accepted ──complete──► completed
+   │                    │
+ reject               cancel
+   ▼                    ▼
+rejected            cancelled
+```
+
+- Création d'un compte → 10 crédits de bienvenue.
+- `accept` : les crédits du demandeur sont **bloqués** (débités, pas encore
+  versés à l'offreur).
+- `complete` : les crédits sont **transférés** à l'offreur.
+- `cancel` / `reject` : les crédits bloqués sont **restitués** au demandeur.
+- Le solde est le cumul d'un journal de transactions (`earn`/`spend`/`refund`),
+  jamais un champ stocké.
 
 Catégories acceptées : Informatique, Jardinage, Bricolage, Cuisine, Musique,
 Langues, Sport, Tutorat, Déménagement, Photographie, Animalier, Couture, Autre.
@@ -69,6 +94,13 @@ curl -X POST http://localhost:8080/api/services \
 
 # Rechercher des services
 curl "http://localhost:8080/api/services?categorie=Musique&search=piano"
+
+# Demander un échange, puis l'offreur l'accepte (crédits bloqués)
+curl -X POST http://localhost:8080/api/exchanges -H "X-User-ID: 2" -d '{"service_id":1}'
+curl -X PUT http://localhost:8080/api/exchanges/1/accept -H "X-User-ID: 1"
+
+# Terminer l'échange (crédits transférés à l'offreur)
+curl -X PUT http://localhost:8080/api/exchanges/1/complete -H "X-User-ID: 2"
 ```
 
 ## Tests

@@ -77,7 +77,7 @@ func (a *app) handleGetService(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateService modifie sa propre annonce.
 func (a *app) handleUpdateService(w http.ResponseWriter, r *http.Request) {
-	id, callerID, err := a.serviceRequest(r)
+	id, callerID, err := a.idAndCaller(r)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -101,7 +101,7 @@ func (a *app) handleUpdateService(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteService supprime sa propre annonce.
 func (a *app) handleDeleteService(w http.ResponseWriter, r *http.Request) {
-	id, callerID, err := a.serviceRequest(r)
+	id, callerID, err := a.idAndCaller(r)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -113,8 +113,8 @@ func (a *app) handleDeleteService(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "annonce supprimée"})
 }
 
-// serviceRequest lit l'identifiant du chemin et l'appelant (X-User-ID).
-func (a *app) serviceRequest(r *http.Request) (id, callerID int, err error) {
+// idAndCaller lit l'identifiant {id} du chemin et l'appelant (X-User-ID).
+func (a *app) idAndCaller(r *http.Request) (id, callerID int, err error) {
 	if id, err = pathID(r); err != nil {
 		return 0, 0, err
 	}
