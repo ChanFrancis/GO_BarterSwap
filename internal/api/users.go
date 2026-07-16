@@ -1,12 +1,11 @@
-package main
+package api
 
 import (
 	"encoding/json"
 	"net/http"
-)
 
-// Handlers users et skills : décodage/encodage JSON et contrôle d'accès
-// uniquement, les règles métier sont dans business.go.
+	"github.com/ChanFrancis/GO_BarterSwap/internal/barterswap"
+)
 
 type userInput struct {
 	Pseudo string `json:"pseudo"`
@@ -16,17 +15,17 @@ type userInput struct {
 
 // handleCreateUser crée un compte ; les crédits de bienvenue sont attribués
 // automatiquement.
-func (a *app) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var in userInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "corps JSON invalide")
 		return
 	}
-	if err := validerPseudo(in.Pseudo); err != nil {
+	if err := barterswap.ValidatePseudo(in.Pseudo); err != nil {
 		respondError(w, err)
 		return
 	}
-	user, err := a.insertUser(r.Context(), in.Pseudo, in.Bio, in.Ville)
+	user, err := s.store.InsertUser(r.Context(), in.Pseudo, in.Bio, in.Ville)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -35,13 +34,13 @@ func (a *app) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetUser retourne le profil public d'un utilisateur.
-func (a *app) handleGetUser(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
-	user, err := a.fetchUser(r.Context(), id)
+	user, err := s.store.FetchUser(r.Context(), id)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -50,8 +49,8 @@ func (a *app) handleGetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleUpdateUser modifie son propre profil (X-User-ID doit correspondre).
-func (a *app) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	id, err := a.selfOnly(r)
+func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	id, err := s.selfOnly(r)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -61,15 +60,15 @@ func (a *app) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "corps JSON invalide")
 		return
 	}
-	if err := validerPseudo(in.Pseudo); err != nil {
+	if err := barterswap.ValidatePseudo(in.Pseudo); err != nil {
 		respondError(w, err)
 		return
 	}
-	if err := a.updateUser(r.Context(), id, in.Pseudo, in.Bio, in.Ville); err != nil {
+	if err := s.store.UpdateUser(r.Context(), id, in.Pseudo, in.Bio, in.Ville); err != nil {
 		respondError(w, err)
 		return
 	}
-	user, err := a.fetchUser(r.Context(), id)
+	user, err := s.store.FetchUser(r.Context(), id)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -78,17 +77,17 @@ func (a *app) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetSkills liste les compétences d'un utilisateur.
-func (a *app) handleGetSkills(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetSkills(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
-	if err := a.userExists(r.Context(), id); err != nil {
+	if err := s.store.UserExists(r.Context(), id); err != nil {
 		respondError(w, err)
 		return
 	}
-	skills, err := a.fetchSkills(r.Context(), id)
+	skills, err := s.store.FetchSkills(r.Context(), id)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -97,22 +96,22 @@ func (a *app) handleGetSkills(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePutSkills définit ses compétences (écrase la liste existante).
-func (a *app) handlePutSkills(w http.ResponseWriter, r *http.Request) {
-	id, err := a.selfOnly(r)
+func (s *Server) handlePutSkills(w http.ResponseWriter, r *http.Request) {
+	id, err := s.selfOnly(r)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
-	var skills []Skill
+	var skills []barterswap.Skill
 	if err := json.NewDecoder(r.Body).Decode(&skills); err != nil {
 		writeError(w, http.StatusBadRequest, "corps JSON invalide")
 		return
 	}
-	if err := validerSkills(skills); err != nil {
+	if err := barterswap.ValidateSkills(skills); err != nil {
 		respondError(w, err)
 		return
 	}
-	if err := a.replaceSkills(r.Context(), id, skills); err != nil {
+	if err := s.store.ReplaceSkills(r.Context(), id, skills); err != nil {
 		respondError(w, err)
 		return
 	}
@@ -121,7 +120,7 @@ func (a *app) handlePutSkills(w http.ResponseWriter, r *http.Request) {
 
 // selfOnly vérifie que l'appelant (X-User-ID) agit sur sa propre ressource
 // {id} et que celle-ci existe.
-func (a *app) selfOnly(r *http.Request) (int, error) {
+func (s *Server) selfOnly(r *http.Request) (int, error) {
 	id, err := pathID(r)
 	if err != nil {
 		return 0, err
@@ -131,9 +130,9 @@ func (a *app) selfOnly(r *http.Request) (int, error) {
 		return 0, err
 	}
 	if caller != id {
-		return 0, ErrInterdit
+		return 0, barterswap.ErrInterdit
 	}
-	if err := a.userExists(r.Context(), id); err != nil {
+	if err := s.store.UserExists(r.Context(), id); err != nil {
 		return 0, err
 	}
 	return id, nil

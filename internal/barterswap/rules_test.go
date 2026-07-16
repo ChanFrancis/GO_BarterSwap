@@ -1,8 +1,8 @@
-package main
+package barterswap
 
 import "testing"
 
-func TestValiderPseudo(t *testing.T) {
+func TestValidatePseudo(t *testing.T) {
 	cases := []struct {
 		name   string
 		pseudo string
@@ -15,7 +15,7 @@ func TestValiderPseudo(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := validerPseudo(c.pseudo)
+			err := ValidatePseudo(c.pseudo)
 			if c.valide && err != nil {
 				t.Errorf("attendu valide, reçu %v", err)
 			}
@@ -26,25 +26,25 @@ func TestValiderPseudo(t *testing.T) {
 	}
 }
 
-func TestValiderService(t *testing.T) {
-	valide := serviceInput{Titre: "Cours de piano", Categorie: "Musique", DureeMinutes: 60, Credits: 2}
+func TestValidateService(t *testing.T) {
+	valide := ServiceInput{Titre: "Cours de piano", Categorie: "Musique", DureeMinutes: 60, Credits: 2}
 
 	cases := []struct {
 		name   string
-		mutate func(*serviceInput)
+		mutate func(*ServiceInput)
 		valide bool
 	}{
-		{"valide", func(in *serviceInput) {}, true},
-		{"titre vide", func(in *serviceInput) { in.Titre = "  " }, false},
-		{"catégorie hors liste", func(in *serviceInput) { in.Categorie = "Astrologie" }, false},
-		{"durée nulle", func(in *serviceInput) { in.DureeMinutes = 0 }, false},
-		{"crédits négatifs", func(in *serviceInput) { in.Credits = -1 }, false},
+		{"valide", func(in *ServiceInput) {}, true},
+		{"titre vide", func(in *ServiceInput) { in.Titre = "  " }, false},
+		{"catégorie hors liste", func(in *ServiceInput) { in.Categorie = "Astrologie" }, false},
+		{"durée nulle", func(in *ServiceInput) { in.DureeMinutes = 0 }, false},
+		{"crédits négatifs", func(in *ServiceInput) { in.Credits = -1 }, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			in := valide
 			c.mutate(&in)
-			err := validerService(in)
+			err := ValidateService(in)
 			if c.valide && err != nil {
 				t.Errorf("attendu valide, reçu %v", err)
 			}
@@ -55,30 +55,30 @@ func TestValiderService(t *testing.T) {
 	}
 }
 
-func TestValiderNote(t *testing.T) {
+func TestValidateNote(t *testing.T) {
 	cases := []struct {
 		note   int
 		valide bool
 	}{{0, false}, {1, true}, {3, true}, {5, true}, {6, false}, {-1, false}}
 	for _, c := range cases {
-		if err := validerNote(c.note); (err == nil) != c.valide {
+		if err := ValidateNote(c.note); (err == nil) != c.valide {
 			t.Errorf("note %d : validité attendue %v, err=%v", c.note, c.valide, err)
 		}
 	}
 }
 
-func TestStatutValide(t *testing.T) {
+func TestValidStatus(t *testing.T) {
 	for _, s := range []string{"pending", "accepted", "rejected", "cancelled", "completed"} {
-		if !statutValide(s) {
+		if !ValidStatus(s) {
 			t.Errorf("%q devrait être un statut valide", s)
 		}
 	}
-	if statutValide("zzz") {
+	if ValidStatus("zzz") {
 		t.Error("zzz ne devrait pas être valide")
 	}
 }
 
-func TestValiderSkills(t *testing.T) {
+func TestValidateSkills(t *testing.T) {
 	cases := []struct {
 		name   string
 		skills []Skill
@@ -95,7 +95,7 @@ func TestValiderSkills(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := validerSkills(c.skills)
+			err := ValidateSkills(c.skills)
 			if c.valide && err != nil {
 				t.Errorf("attendu valide, reçu %v", err)
 			}

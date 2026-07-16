@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"net/http"
@@ -8,23 +8,16 @@ import (
 )
 
 // Tests d'API sans base de données : routes et chemins d'erreur qui
-// n'atteignent pas le stockage. Les parcours complets sont vérifiés via
-// docker compose (voir README).
+// n'atteignent pas le stockage. Les parcours complets sont couverts par
+// integration_test.go.
 
-func doRequest(t *testing.T, method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
-	t.Helper()
-	var reader *strings.Reader
-	if body == "" {
-		reader = strings.NewReader("")
-	} else {
-		reader = strings.NewReader(body)
-	}
-	req := httptest.NewRequest(method, path, reader)
+func unitRequest(method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 	rec := httptest.NewRecorder()
-	(&app{}).routes().ServeHTTP(rec, req)
+	NewServer(nil).Routes().ServeHTTP(rec, req)
 	return rec
 }
 
@@ -86,7 +79,7 @@ func TestRoutes(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			rec := doRequest(t, c.method, c.path, c.body, c.headers)
+			rec := unitRequest(c.method, c.path, c.body, c.headers)
 			if rec.Code != c.wantStatus {
 				t.Errorf("code attendu %d, reçu %d (corps : %s)",
 					c.wantStatus, rec.Code, rec.Body.String())
@@ -96,7 +89,7 @@ func TestRoutes(t *testing.T) {
 }
 
 func TestHealthBody(t *testing.T) {
-	rec := doRequest(t, http.MethodGet, "/health", "", nil)
+	rec := unitRequest(http.MethodGet, "/health", "", nil)
 	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
 		t.Errorf("corps inattendu : %s", rec.Body.String())
 	}

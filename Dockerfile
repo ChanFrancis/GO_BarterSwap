@@ -7,7 +7,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -o /barterswap .
+RUN CGO_ENABLED=0 go build -o /barterswap ./cmd/barterswap
 
 # Étape finale : image minimale, sans shell ni root
 FROM gcr.io/distroless/static-debian12:nonroot

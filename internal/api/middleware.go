@@ -1,10 +1,12 @@
-package main
+package api
 
 import (
 	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/ChanFrancis/GO_BarterSwap/internal/barterswap"
 )
 
 // withMiddlewares enchaîne recovery → CORS → logging sur tout le routeur.
@@ -53,7 +55,7 @@ func cors(next http.Handler) http.Handler {
 func currentUserID(r *http.Request) (int, error) {
 	id, err := strconv.Atoi(r.Header.Get("X-User-ID"))
 	if err != nil || id <= 0 {
-		return 0, ValidationError{"header X-User-ID manquant ou invalide"}
+		return 0, barterswap.ValidationError{Message: "header X-User-ID manquant ou invalide"}
 	}
 	return id, nil
 }
@@ -62,7 +64,7 @@ func currentUserID(r *http.Request) (int, error) {
 func pathID(r *http.Request) (int, error) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id <= 0 {
-		return 0, ValidationError{"identifiant invalide dans l'URL"}
+		return 0, barterswap.ValidationError{Message: "identifiant invalide dans l'URL"}
 	}
 	return id, nil
 }
@@ -70,7 +72,7 @@ func pathID(r *http.Request) (int, error) {
 // idAndCaller lit à la fois l'identifiant {id} du chemin et l'appelant
 // (X-User-ID) : combinaison utilisée par les routes réservées au
 // propriétaire d'une ressource.
-func (a *app) idAndCaller(r *http.Request) (id, callerID int, err error) {
+func idAndCaller(r *http.Request) (id, callerID int, err error) {
 	if id, err = pathID(r); err != nil {
 		return 0, 0, err
 	}

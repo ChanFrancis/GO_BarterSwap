@@ -1,33 +1,31 @@
-package main
+package store
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-)
 
-// Accès base de données des échanges. Toutes les transitions passent par une
-// transaction avec verrous de lignes : c'est la base, et non un mutex, qui
-// sérialise les accès concurrents (contrainte du sujet).
+	"github.com/ChanFrancis/GO_BarterSwap/internal/barterswap"
+)
 
 // exchangeLock est un échange verrouillé, enrichi du coût du service.
 type exchangeLock struct {
-	Exchange
+	barterswap.Exchange
 	credits int
 }
 
-// createExchange crée une demande d'échange après vérification des règles
+// CreateExchange crée une demande d'échange après vérification des règles
 // métier : service existant, pas le sien, aucun échange en cours, crédits
 // suffisants.
-func (a *app) createExchange(ctx context.Context, requesterID, serviceID int) (Exchange, error) {
-	if err := a.userExists(ctx, requesterID); err != nil {
-		return Exchange{}, err
+func (s *Store) CreateExchange(ctx context.Context, requesterID, serviceID int) (barterswap.Exchange, error) {
+	if err := s.UserExists(ctx, requesterID); err != nil {
+		return barterswap.Exchange{}, err
 	}
 
-	tx, err := a.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
 	defer tx.Rollback()
 
@@ -36,57 +34,56 @@ func (a *app) createExchange(ctx context.Context, requesterID, serviceID int) (E
 		`SELECT provider_id, credits FROM services WHERE id = $1 FOR UPDATE`, serviceID).
 		Scan(&providerID, &credits)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Exchange{}, ErrIntrouvable
+		return barterswap.Exchange{}, barterswap.ErrIntrouvable
 	}
 	if err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
 	if providerID == requesterID {
-		return Exchange{}, ErrServicePropre
+		return barterswap.Exchange{}, barterswap.ErrServicePropre
 	}
 
 	// Un service ne peut avoir qu'un seul échange pending ou accepted.
 	var enCours bool
 	err = tx.QueryRowContext(ctx,
-		`SELECT EXISTS (SELECT 1 FROM exchanges
-		 WHERE service_id = $1 AND status IN ($2, $3))`,
-		serviceID, StatusPending, StatusAccepted).Scan(&enCours)
+		`SELECT EXISTS (SELECT 1 FROM exchanges WHERE service_id = $1 AND status IN ($2, $3))`,
+		serviceID, barterswap.StatusPending, barterswap.StatusAccepted).Scan(&enCours)
 	if err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
 	if enCours {
-		return Exchange{}, ErrDejaReserve
+		return barterswap.Exchange{}, barterswap.ErrDejaReserve
 	}
 
 	solde, err := balance(ctx, tx, requesterID)
 	if err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
 	if solde < credits {
-		return Exchange{}, ErrCreditsInsuffisants
+		return barterswap.Exchange{}, barterswap.ErrCreditsInsuffisants
 	}
 
-	var ex Exchange
+	var ex barterswap.Exchange
 	err = tx.QueryRowContext(ctx,
 		`INSERT INTO exchanges (service_id, requester_id, owner_id) VALUES ($1, $2, $3)
 		 RETURNING id, service_id, requester_id, owner_id, status, created_at, updated_at`,
 		serviceID, requesterID, providerID).
 		Scan(&ex.ID, &ex.ServiceID, &ex.RequesterID, &ex.OwnerID, &ex.Status, &ex.CreatedAt, &ex.UpdatedAt)
 	if err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
 	return ex, tx.Commit()
 }
 
-// acceptExchange (par l'offreur) bloque les crédits du demandeur : ils sont
+// AcceptExchange (par l'offreur) bloque les crédits du demandeur : ils sont
 // débités mais pas encore crédités à l'offreur.
-func (a *app) acceptExchange(ctx context.Context, id, callerID int) (Exchange, error) {
-	return a.transition(ctx, id, func(tx *sql.Tx, e exchangeLock) error {
+func (s *Store) AcceptExchange(ctx context.Context, id, callerID int) (barterswap.Exchange, error) {
+	return s.transition(ctx, id, func(tx *sql.Tx, e exchangeLock) error {
 		if callerID != e.OwnerID {
-			return ErrInterdit
+			return barterswap.ErrInterdit
 		}
-		if e.Status != StatusPending {
-			return ErrTransitionInvalide
+		if e.Status != barterswap.StatusPending {
+			return barterswap.ErrTransitionInvalide
 		}
 		// Verrou du demandeur pour sérialiser les vérifications de solde.
 		if _, err := tx.ExecContext(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, e.RequesterID); err != nil {
@@ -97,67 +94,67 @@ func (a *app) acceptExchange(ctx context.Context, id, callerID int) (Exchange, e
 			return err
 		}
 		if solde < e.credits {
-			return ErrCreditsInsuffisants
+			return barterswap.ErrCreditsInsuffisants
 		}
-		if err := setExchangeStatus(ctx, tx, id, StatusAccepted); err != nil {
+		if err := setExchangeStatus(ctx, tx, id, barterswap.StatusAccepted); err != nil {
 			return err
 		}
 		return addTransaction(ctx, tx, e.RequesterID, id, -e.credits, "spend")
 	})
 }
 
-// completeExchange transfère définitivement les crédits à l'offreur.
-func (a *app) completeExchange(ctx context.Context, id, callerID int) (Exchange, error) {
-	return a.transition(ctx, id, func(tx *sql.Tx, e exchangeLock) error {
+// CompleteExchange transfère définitivement les crédits à l'offreur.
+func (s *Store) CompleteExchange(ctx context.Context, id, callerID int) (barterswap.Exchange, error) {
+	return s.transition(ctx, id, func(tx *sql.Tx, e exchangeLock) error {
 		if callerID != e.OwnerID && callerID != e.RequesterID {
-			return ErrInterdit
+			return barterswap.ErrInterdit
 		}
-		if e.Status != StatusAccepted {
-			return ErrTransitionInvalide
+		if e.Status != barterswap.StatusAccepted {
+			return barterswap.ErrTransitionInvalide
 		}
-		if err := setExchangeStatus(ctx, tx, id, StatusCompleted); err != nil {
+		if err := setExchangeStatus(ctx, tx, id, barterswap.StatusCompleted); err != nil {
 			return err
 		}
 		return addTransaction(ctx, tx, e.OwnerID, id, e.credits, "earn")
 	})
 }
 
-// cancelExchange (demandeur ou offreur) restitue les crédits bloqués.
-func (a *app) cancelExchange(ctx context.Context, id, callerID int) (Exchange, error) {
-	return a.transition(ctx, id, func(tx *sql.Tx, e exchangeLock) error {
+// CancelExchange (demandeur ou offreur) restitue les crédits bloqués.
+func (s *Store) CancelExchange(ctx context.Context, id, callerID int) (barterswap.Exchange, error) {
+	return s.transition(ctx, id, func(tx *sql.Tx, e exchangeLock) error {
 		if callerID != e.OwnerID && callerID != e.RequesterID {
-			return ErrInterdit
+			return barterswap.ErrInterdit
 		}
-		if e.Status != StatusAccepted {
-			return ErrTransitionInvalide
+		if e.Status != barterswap.StatusAccepted {
+			return barterswap.ErrTransitionInvalide
 		}
-		if err := setExchangeStatus(ctx, tx, id, StatusCancelled); err != nil {
+		if err := setExchangeStatus(ctx, tx, id, barterswap.StatusCancelled); err != nil {
 			return err
 		}
 		return addTransaction(ctx, tx, e.RequesterID, id, e.credits, "refund")
 	})
 }
 
-// rejectExchange (par l'offreur) refuse une demande en attente. Aucun crédit
+// RejectExchange (par l'offreur) refuse une demande en attente. Aucun crédit
 // n'est bloqué à ce stade, il n'y a donc rien à restituer.
-func (a *app) rejectExchange(ctx context.Context, id, callerID int) (Exchange, error) {
-	return a.transition(ctx, id, func(tx *sql.Tx, e exchangeLock) error {
+func (s *Store) RejectExchange(ctx context.Context, id, callerID int) (barterswap.Exchange, error) {
+	return s.transition(ctx, id, func(tx *sql.Tx, e exchangeLock) error {
 		if callerID != e.OwnerID {
-			return ErrInterdit
+			return barterswap.ErrInterdit
 		}
-		if e.Status != StatusPending {
-			return ErrTransitionInvalide
+		if e.Status != barterswap.StatusPending {
+			return barterswap.ErrTransitionInvalide
 		}
-		return setExchangeStatus(ctx, tx, id, StatusRejected)
+		return setExchangeStatus(ctx, tx, id, barterswap.StatusRejected)
 	})
 }
 
 // transition charge et verrouille l'échange, applique la règle fournie, puis
 // valide la transaction et retourne l'échange à jour.
-func (a *app) transition(ctx context.Context, id int, apply func(*sql.Tx, exchangeLock) error) (Exchange, error) {
-	tx, err := a.db.BeginTx(ctx, nil)
+func (s *Store) transition(ctx context.Context, id int, apply func(*sql.Tx, exchangeLock) error) (barterswap.Exchange, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
 	defer tx.Rollback()
 
@@ -170,19 +167,19 @@ func (a *app) transition(ctx context.Context, id int, apply func(*sql.Tx, exchan
 		Scan(&e.ID, &e.ServiceID, &e.RequesterID, &e.OwnerID, &e.Status,
 			&e.CreatedAt, &e.UpdatedAt, &e.credits)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Exchange{}, ErrIntrouvable
+		return barterswap.Exchange{}, barterswap.ErrIntrouvable
 	}
 	if err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
 
 	if err := apply(tx, e); err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return Exchange{}, err
+		return barterswap.Exchange{}, err
 	}
-	return a.fetchExchange(ctx, id)
+	return s.FetchExchange(ctx, id)
 }
 
 func setExchangeStatus(ctx context.Context, tx *sql.Tx, id int, status string) error {
@@ -198,22 +195,22 @@ func addTransaction(ctx context.Context, tx *sql.Tx, userID, exchangeID, montant
 	return err
 }
 
-// fetchExchange retourne un échange par son identifiant.
-func (a *app) fetchExchange(ctx context.Context, id int) (Exchange, error) {
-	var ex Exchange
-	err := a.db.QueryRowContext(ctx,
+// FetchExchange retourne un échange par son identifiant.
+func (s *Store) FetchExchange(ctx context.Context, id int) (barterswap.Exchange, error) {
+	var ex barterswap.Exchange
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, service_id, requester_id, owner_id, status, created_at, updated_at
 		 FROM exchanges WHERE id = $1`, id).
 		Scan(&ex.ID, &ex.ServiceID, &ex.RequesterID, &ex.OwnerID, &ex.Status, &ex.CreatedAt, &ex.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return ex, ErrIntrouvable
+		return ex, barterswap.ErrIntrouvable
 	}
 	return ex, err
 }
 
-// listExchanges retourne les échanges impliquant l'utilisateur (demandés ou
+// ListExchanges retourne les échanges impliquant l'utilisateur (demandés ou
 // reçus), éventuellement filtrés par statut.
-func (a *app) listExchanges(ctx context.Context, userID int, status string) ([]Exchange, error) {
+func (s *Store) ListExchanges(ctx context.Context, userID int, status string) ([]barterswap.Exchange, error) {
 	query := `SELECT id, service_id, requester_id, owner_id, status, created_at, updated_at
 	          FROM exchanges WHERE (requester_id = $1 OR owner_id = $1)`
 	args := []any{userID}
@@ -223,15 +220,15 @@ func (a *app) listExchanges(ctx context.Context, userID int, status string) ([]E
 	}
 	query += " ORDER BY created_at DESC"
 
-	rows, err := a.db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	exchanges := []Exchange{}
+	exchanges := []barterswap.Exchange{}
 	for rows.Next() {
-		var ex Exchange
+		var ex barterswap.Exchange
 		if err := rows.Scan(&ex.ID, &ex.ServiceID, &ex.RequesterID, &ex.OwnerID,
 			&ex.Status, &ex.CreatedAt, &ex.UpdatedAt); err != nil {
 			return nil, err

@@ -1,6 +1,5 @@
-// BarterSwap est une API d'échange de compétences entre particuliers :
-// chaque heure de service rendue donne droit à une heure de service reçue,
-// comptée en crédits-temps.
+// Commande barterswap : point d'entrée de l'API d'échange de compétences.
+// Elle câble le store (PostgreSQL) et le serveur HTTP, puis écoute.
 package main
 
 import (
@@ -8,6 +7,9 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/ChanFrancis/GO_BarterSwap/internal/api"
+	"github.com/ChanFrancis/GO_BarterSwap/internal/store"
 )
 
 func main() {
@@ -20,17 +22,15 @@ func main() {
 		databaseURL = "postgres://barterswap:barterswap@localhost:5432/barterswap?sslmode=disable"
 	}
 
-	db, err := openDB(databaseURL)
+	st, err := store.New(databaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
-
-	a := &app{db: db}
+	defer st.Close()
 
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           a.routes(),
+		Handler:           api.NewServer(st).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

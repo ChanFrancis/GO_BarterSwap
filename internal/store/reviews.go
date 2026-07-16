@@ -1,19 +1,21 @@
-package main
+package store
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"strings"
+
+	"github.com/ChanFrancis/GO_BarterSwap/internal/barterswap"
 )
 
-// insertReview enregistre un avis sur un échange terminé. L'auteur doit être
+// InsertReview enregistre un avis sur un échange terminé. L'auteur doit être
 // une partie de l'échange ; la cible est l'autre partie. Un seul avis par
 // auteur et par échange (contrainte d'unicité en base).
-func (a *app) insertReview(ctx context.Context, exchangeID, authorID, note int, commentaire string) (Review, error) {
-	tx, err := a.db.BeginTx(ctx, nil)
+func (s *Store) InsertReview(ctx context.Context, exchangeID, authorID, note int, commentaire string) (barterswap.Review, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return Review{}, err
+		return barterswap.Review{}, err
 	}
 	defer tx.Rollback()
 
@@ -23,17 +25,17 @@ func (a *app) insertReview(ctx context.Context, exchangeID, authorID, note int, 
 		`SELECT requester_id, owner_id, status FROM exchanges WHERE id = $1`, exchangeID).
 		Scan(&requesterID, &ownerID, &status)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Review{}, ErrIntrouvable
+		return barterswap.Review{}, barterswap.ErrIntrouvable
 	}
 	if err != nil {
-		return Review{}, err
+		return barterswap.Review{}, err
 	}
 
 	if authorID != requesterID && authorID != ownerID {
-		return Review{}, ErrInterdit
+		return barterswap.Review{}, barterswap.ErrInterdit
 	}
-	if status != StatusCompleted {
-		return Review{}, ErrEchangeNonTermine
+	if status != barterswap.StatusCompleted {
+		return barterswap.Review{}, barterswap.ErrEchangeNonTermine
 	}
 
 	targetID := ownerID
@@ -41,7 +43,7 @@ func (a *app) insertReview(ctx context.Context, exchangeID, authorID, note int, 
 		targetID = requesterID
 	}
 
-	var rv Review
+	var rv barterswap.Review
 	err = tx.QueryRowContext(ctx,
 		`INSERT INTO reviews (exchange_id, author_id, target_id, note, commentaire)
 		 VALUES ($1, $2, $3, $4, $5)
@@ -50,38 +52,38 @@ func (a *app) insertReview(ctx context.Context, exchangeID, authorID, note int, 
 		Scan(&rv.ID, &rv.ExchangeID, &rv.AuthorID, &rv.TargetID, &rv.Note, &rv.Commentaire, &rv.CreatedAt)
 	if err != nil {
 		if strings.Contains(err.Error(), "reviews_exchange_id_author_id_key") {
-			return Review{}, ErrDejaNote
+			return barterswap.Review{}, barterswap.ErrDejaNote
 		}
-		return Review{}, err
+		return barterswap.Review{}, err
 	}
 	return rv, tx.Commit()
 }
 
-// reviewsForUser retourne les avis reçus par un utilisateur.
-func (a *app) reviewsForUser(ctx context.Context, targetID int) ([]Review, error) {
-	return a.scanReviews(ctx,
+// ReviewsForUser retourne les avis reçus par un utilisateur.
+func (s *Store) ReviewsForUser(ctx context.Context, targetID int) ([]barterswap.Review, error) {
+	return s.scanReviews(ctx,
 		`SELECT id, exchange_id, author_id, target_id, note, commentaire, created_at
 		 FROM reviews WHERE target_id = $1 ORDER BY created_at DESC`, targetID)
 }
 
-// reviewsForService retourne les avis portant sur les échanges d'un service.
-func (a *app) reviewsForService(ctx context.Context, serviceID int) ([]Review, error) {
-	return a.scanReviews(ctx,
+// ReviewsForService retourne les avis portant sur les échanges d'un service.
+func (s *Store) ReviewsForService(ctx context.Context, serviceID int) ([]barterswap.Review, error) {
+	return s.scanReviews(ctx,
 		`SELECT r.id, r.exchange_id, r.author_id, r.target_id, r.note, r.commentaire, r.created_at
 		 FROM reviews r JOIN exchanges e ON e.id = r.exchange_id
 		 WHERE e.service_id = $1 ORDER BY r.created_at DESC`, serviceID)
 }
 
-func (a *app) scanReviews(ctx context.Context, query string, args ...any) ([]Review, error) {
-	rows, err := a.db.QueryContext(ctx, query, args...)
+func (s *Store) scanReviews(ctx context.Context, query string, args ...any) ([]barterswap.Review, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	reviews := []Review{}
+	reviews := []barterswap.Review{}
 	for rows.Next() {
-		var rv Review
+		var rv barterswap.Review
 		if err := rows.Scan(&rv.ID, &rv.ExchangeID, &rv.AuthorID, &rv.TargetID,
 			&rv.Note, &rv.Commentaire, &rv.CreatedAt); err != nil {
 			return nil, err
@@ -91,39 +93,39 @@ func (a *app) scanReviews(ctx context.Context, query string, args ...any) ([]Rev
 	return reviews, rows.Err()
 }
 
-// fetchUserStats agrège les statistiques d'un utilisateur.
-func (a *app) fetchUserStats(ctx context.Context, userID int) (UserStats, error) {
-	if err := a.userExists(ctx, userID); err != nil {
-		return UserStats{}, err
+// FetchUserStats agrège les statistiques d'un utilisateur.
+func (s *Store) FetchUserStats(ctx context.Context, userID int) (barterswap.UserStats, error) {
+	if err := s.UserExists(ctx, userID); err != nil {
+		return barterswap.UserStats{}, err
 	}
 
-	s := UserStats{UserID: userID}
-	if err := a.db.QueryRowContext(ctx,
+	st := barterswap.UserStats{UserID: userID}
+	if err := s.db.QueryRowContext(ctx,
 		`SELECT count(*) FROM services WHERE provider_id = $1 AND actif = true`,
-		userID).Scan(&s.ServicesActifs); err != nil {
-		return UserStats{}, err
+		userID).Scan(&st.ServicesActifs); err != nil {
+		return barterswap.UserStats{}, err
 	}
-	if err := a.db.QueryRowContext(ctx,
+	if err := s.db.QueryRowContext(ctx,
 		`SELECT count(*) FROM exchanges
 		 WHERE (requester_id = $1 OR owner_id = $1) AND status = $2`,
-		userID, StatusCompleted).Scan(&s.EchangesCompletes); err != nil {
-		return UserStats{}, err
+		userID, barterswap.StatusCompleted).Scan(&st.EchangesCompletes); err != nil {
+		return barterswap.UserStats{}, err
 	}
 	// Solde et totaux dérivés du journal : gagné = crédits entrants,
 	// dépensé = crédits sortants, solde = gagné - dépensé.
-	if err := a.db.QueryRowContext(ctx,
+	if err := s.db.QueryRowContext(ctx,
 		`SELECT
 		   COALESCE(SUM(montant), 0),
 		   COALESCE(SUM(montant) FILTER (WHERE montant > 0), 0),
 		   COALESCE(-SUM(montant) FILTER (WHERE montant < 0), 0)
 		 FROM credit_transactions WHERE user_id = $1`,
-		userID).Scan(&s.CreditBalance, &s.TotalGagne, &s.TotalDepense); err != nil {
-		return UserStats{}, err
+		userID).Scan(&st.CreditBalance, &st.TotalGagne, &st.TotalDepense); err != nil {
+		return barterswap.UserStats{}, err
 	}
-	if err := a.db.QueryRowContext(ctx,
+	if err := s.db.QueryRowContext(ctx,
 		`SELECT count(*), COALESCE(AVG(note), 0) FROM reviews WHERE target_id = $1`,
-		userID).Scan(&s.NbAvis, &s.NoteMoyenne); err != nil {
-		return UserStats{}, err
+		userID).Scan(&st.NbAvis, &st.NoteMoyenne); err != nil {
+		return barterswap.UserStats{}, err
 	}
-	return s, nil
+	return st, nil
 }

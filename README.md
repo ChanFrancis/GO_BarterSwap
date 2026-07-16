@@ -11,7 +11,7 @@ uniquement) avec PostgreSQL.
 git clone git@github.com:ChanFrancis/GO_BarterSwap.git
 cd GO_BarterSwap
 go mod tidy
-go run .
+go run ./cmd/barterswap
 ```
 
 Avec Docker (recommandé, lance aussi PostgreSQL) :

@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"bytes"
@@ -8,33 +8,36 @@ import (
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/ChanFrancis/GO_BarterSwap/internal/barterswap"
+	"github.com/ChanFrancis/GO_BarterSwap/internal/store"
 )
 
 // Tests d'intégration sur une vraie base PostgreSQL. Ils se sautent
 // automatiquement si TEST_DATABASE_URL n'est pas défini, de sorte que
 // `go test` fonctionne sans base ; la CI les exécute contre un service
-// PostgreSQL. Ils couvrent tout le code d'accès aux données.
+// PostgreSQL. Ils couvrent l'ensemble des couches (api → store → domaine).
 
-func newTestApp(t *testing.T) *app {
+type client struct {
+	t *testing.T
+	h http.Handler
+}
+
+func newTestClient(t *testing.T) *client {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("TEST_DATABASE_URL non défini : test d'intégration ignoré")
 	}
-	db, err := openDB(url)
+	st, err := store.New(url)
 	if err != nil {
 		t.Fatalf("connexion à la base de test : %v", err)
 	}
-	if _, err := db.Exec(
+	if _, err := st.DB().Exec(
 		`TRUNCATE reviews, credit_transactions, exchanges, services, skills, users RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("nettoyage de la base : %v", err)
 	}
-	return &app{db: db}
-}
-
-type client struct {
-	t *testing.T
-	h http.Handler
+	return &client{t: t, h: NewServer(st).Routes()}
 }
 
 func (c *client) do(method, path, body string, userID int) *httptest.ResponseRecorder {
@@ -58,7 +61,7 @@ func (c *client) mustStatus(rec *httptest.ResponseRecorder, want int, ctx string
 func (c *client) balance(userID int) int {
 	c.t.Helper()
 	rec := c.do(http.MethodGet, "/api/users/"+strconv.Itoa(userID), "", 0)
-	var u User
+	var u barterswap.User
 	if err := json.Unmarshal(rec.Body.Bytes(), &u); err != nil {
 		c.t.Fatalf("décodage user : %v", err)
 	}
@@ -66,16 +69,15 @@ func (c *client) balance(userID int) int {
 }
 
 func TestIntegrationParcoursComplet(t *testing.T) {
-	a := newTestApp(t)
-	c := &client{t: t, h: a.routes()}
+	c := newTestClient(t)
 
 	// Création des comptes : alice=1, bob=2, carol=3 (10 crédits chacun).
 	for _, pseudo := range []string{"alice", "bob", "carol"} {
 		rec := c.do(http.MethodPost, "/api/users", `{"pseudo":"`+pseudo+`"}`, 0)
 		c.mustStatus(rec, http.StatusCreated, "création "+pseudo)
 	}
-	if bal := c.balance(1); bal != CreditsBienvenue {
-		t.Fatalf("crédits de bienvenue : attendu %d, reçu %d", CreditsBienvenue, bal)
+	if bal := c.balance(1); bal != barterswap.CreditsBienvenue {
+		t.Fatalf("crédits de bienvenue : attendu %d, reçu %d", barterswap.CreditsBienvenue, bal)
 	}
 
 	// bob déclare une compétence et publie deux services.
@@ -149,8 +151,8 @@ func TestIntegrationParcoursComplet(t *testing.T) {
 	}
 	c.mustStatus(c.do(http.MethodPut, "/api/exchanges/2/cancel", "", 3),
 		http.StatusOK, "cancel 2")
-	if got := c.balance(3); got != CreditsBienvenue {
-		t.Fatalf("après cancel, solde carol restitué à %d, reçu %d", CreditsBienvenue, got)
+	if got := c.balance(3); got != barterswap.CreditsBienvenue {
+		t.Fatalf("après cancel, solde carol restitué à %d, reçu %d", barterswap.CreditsBienvenue, got)
 	}
 
 	// Refus d'une demande en attente (aucun crédit bloqué).
@@ -166,7 +168,7 @@ func TestIntegrationParcoursComplet(t *testing.T) {
 	// Statistiques cohérentes pour bob.
 	rec := c.do(http.MethodGet, "/api/users/2/stats", "", 0)
 	c.mustStatus(rec, http.StatusOK, "stats bob")
-	var stats UserStats
+	var stats barterswap.UserStats
 	if err := json.Unmarshal(rec.Body.Bytes(), &stats); err != nil {
 		t.Fatalf("décodage stats : %v", err)
 	}

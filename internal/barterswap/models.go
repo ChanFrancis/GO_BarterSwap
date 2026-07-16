@@ -1,8 +1,9 @@
-package main
+// Package barterswap définit le domaine métier de l'application : les
+// entités, les erreurs et les règles pures (validations, cycle de vie des
+// échanges). Ce package ne dépend ni de HTTP ni de la base de données.
+package barterswap
 
 import "time"
-
-// Structures de l'API, avec les tags JSON imposés par le sujet.
 
 // User est un membre de la plateforme, avec ses compétences et son solde de
 // crédits-temps.
@@ -30,8 +31,8 @@ type Service struct {
 	Titre        string    `json:"titre"`
 	Description  string    `json:"description,omitempty"`
 	Categorie    string    `json:"categorie"`
-	DureeMinutes int       `json:"duree_minutes"` // durée estimée
-	Credits      int       `json:"credits"`       // coût en crédits-temps
+	DureeMinutes int       `json:"duree_minutes"`
+	Credits      int       `json:"credits"`
 	Ville        string    `json:"ville,omitempty"`
 	Actif        bool      `json:"actif"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -42,9 +43,9 @@ type Service struct {
 type Exchange struct {
 	ID          int       `json:"id"`
 	ServiceID   int       `json:"service_id"`
-	RequesterID int       `json:"requester_id"` // celui qui demande
-	OwnerID     int       `json:"owner_id"`     // celui qui propose
-	Status      string    `json:"status"`       // pending, accepted, rejected, cancelled, completed
+	RequesterID int       `json:"requester_id"`
+	OwnerID     int       `json:"owner_id"`
+	Status      string    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -79,6 +80,6 @@ type UserStats struct {
 	CreditBalance     int     `json:"credit_balance"`
 	NoteMoyenne       float64 `json:"note_moyenne"`
 	NbAvis            int     `json:"nb_avis"`
-	TotalGagne        int     `json:"total_gagne"`   // crédits gagnés au total
-	TotalDepense      int     `json:"total_depense"` // crédits dépensés au total
+	TotalGagne        int     `json:"total_gagne"`
+	TotalDepense      int     `json:"total_depense"`
 }

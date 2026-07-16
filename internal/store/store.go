@@ -1,4 +1,8 @@
-package main
+// Package store gère l'accès à la base PostgreSQL. Il traduit les lignes en
+// entités du domaine (package barterswap) et applique les transactions et
+// verrous nécessaires — c'est la base, et non un mutex, qui sérialise la
+// concurrence.
+package store
 
 import (
 	"context"
@@ -9,16 +13,16 @@ import (
 	_ "github.com/lib/pq" // driver PostgreSQL (seule dépendance externe autorisée)
 )
 
-//go:embed db/schema.sql
+//go:embed schema.sql
 var schemaSQL string
 
-// app porte les dépendances partagées par les handlers.
-type app struct {
+// Store encapsule la connexion à la base.
+type Store struct {
 	db *sql.DB
 }
 
-// openDB se connecte à PostgreSQL et applique le schéma (idempotent).
-func openDB(databaseURL string) (*sql.DB, error) {
+// New se connecte à PostgreSQL et applique le schéma (idempotent).
+func New(databaseURL string) (*Store, error) {
 	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("ouverture de la base : %w", err)
@@ -29,8 +33,14 @@ func openDB(databaseURL string) (*sql.DB, error) {
 	if _, err := db.Exec(schemaSQL); err != nil {
 		return nil, fmt.Errorf("application du schéma : %w", err)
 	}
-	return db, nil
+	return &Store{db: db}, nil
 }
+
+// Close ferme la connexion à la base.
+func (s *Store) Close() error { return s.db.Close() }
+
+// DB expose la connexion sous-jacente (utile pour l'outillage et les tests).
+func (s *Store) DB() *sql.DB { return s.db }
 
 // rowQuerier couvre *sql.DB et *sql.Tx pour partager les calculs de solde.
 type rowQuerier interface {
@@ -44,23 +54,4 @@ func balance(ctx context.Context, q rowQuerier, userID int) (int, error) {
 		`SELECT COALESCE(SUM(montant), 0) FROM credit_transactions WHERE user_id = $1`,
 		userID).Scan(&solde)
 	return solde, err
-}
-
-// creditBalance calcule le solde d'un utilisateur (hors transaction).
-func (a *app) creditBalance(ctx context.Context, userID int) (int, error) {
-	return balance(ctx, a.db, userID)
-}
-
-// userExists vérifie qu'un utilisateur existe.
-func (a *app) userExists(ctx context.Context, id int) error {
-	var ok bool
-	err := a.db.QueryRowContext(ctx,
-		`SELECT EXISTS (SELECT 1 FROM users WHERE id = $1)`, id).Scan(&ok)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return ErrIntrouvable
-	}
-	return nil
 }
