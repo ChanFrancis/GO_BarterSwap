@@ -22,6 +22,8 @@ d'infra de prod.
   racine, pas l'interdiction des sous-packages.
 - **Une seule dépendance externe autorisée : le driver de base de données**
   (lib/pq, pgx, go-sql-driver/mysql…). Rien d'autre, pas de x/crypto.
+  Swagger UI ne compte pas : ce sont des assets front (JS/CSS) + un
+  `openapi.yaml`, servis par la stdlib ; `go.mod` ne contient que le driver.
 - **Pas d'ORM** : `database/sql` de la stdlib uniquement.
 - **Pas de framework HTTP** (ni Gin, ni Echo, ni Chi) : `net/http` seul.
 - **Pas de mutex** : la base de données gère la concurrence.
@@ -73,6 +75,9 @@ internal/api/                 EXPOSITION HTTP
   server.go                     type Server, Routes, helpers JSON/erreurs
   middleware.go                 X-User-ID, logging, recovery, CORS
   users.go services.go exchanges.go reviews.go
+  docs.go                       sert Swagger UI (/docs) et la spec (/openapi.yaml)
+  openapi.yaml                  spécification OpenAPI (écrite à la main)
+  swaggerui/                    assets Swagger UI vendorisés (embed, offline)
   server_test.go                httptest (sans base)
   integration_test.go           parcours complet sur vraie base
 

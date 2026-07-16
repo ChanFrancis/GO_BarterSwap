@@ -1,0 +1,4 @@
+# Assets Swagger UI tiers (Apache-2.0), embarqués pour servir la doc hors-ligne.
+# Marqués « vendored » pour ne pas fausser les statistiques de langage GitHub.
+internal/api/swaggerui/swagger-ui.css linguist-vendored
+internal/api/swaggerui/swagger-ui-bundle.js linguist-vendored

@@ -21,6 +21,17 @@ cp .env.example .env   # renseigner POSTGRES_PASSWORD
 docker compose up --build
 ```
 
+## Documentation interactive (Swagger UI)
+
+Une fois l'API lancée, la documentation Swagger UI est disponible sur
+**http://localhost:8080/docs** : elle liste tous les endpoints et permet de
+les tester depuis le navigateur (bouton « Try it out », avec le header
+`X-User-ID`). La spécification OpenAPI brute est sur
+http://localhost:8080/openapi.yaml.
+
+Swagger UI est embarqué dans le binaire (fichiers statiques servis par
+`net/http`) : aucune dépendance Go ajoutée, aucun accès réseau requis.
+
 ## Endpoints
 
 L'utilisateur courant est identifié par le header `X-User-ID` (pas

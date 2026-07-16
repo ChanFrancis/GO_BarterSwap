@@ -29,6 +29,13 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("GET /health", handleHealth)
 
+	// Documentation interactive (Swagger UI) et spécification OpenAPI.
+	mux.Handle("GET /docs/", swaggerHandler())
+	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/docs/", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("GET /openapi.yaml", s.handleOpenAPISpec)
+
 	mux.HandleFunc("POST /api/users", s.handleCreateUser)
 	mux.HandleFunc("GET /api/users/{id}", s.handleGetUser)
 	mux.HandleFunc("PUT /api/users/{id}", s.handleUpdateUser)

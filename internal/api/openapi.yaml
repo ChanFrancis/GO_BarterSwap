@@ -1,0 +1,498 @@
+openapi: 3.0.3
+info:
+  title: BarterSwap — API d'échange de compétences
+  description: >
+    Banque de temps : chaque heure de service rendue donne droit à une heure
+    de service reçue, comptée en crédits-temps. L'utilisateur courant est
+    identifié par le header `X-User-ID` (pas d'authentification avancée).
+  version: "1.0.0"
+servers:
+  - url: http://localhost:8080
+
+tags:
+  - name: Utilisateurs
+  - name: Services
+  - name: Échanges
+  - name: Évaluations
+  - name: Système
+
+paths:
+  /health:
+    get:
+      tags: [Système]
+      summary: État de santé de l'API
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+
+  /api/users:
+    post:
+      tags: [Utilisateurs]
+      summary: Créer un compte (10 crédits de bienvenue)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserInput" }
+      responses:
+        "201":
+          description: Compte créé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/Erreur" }
+
+  /api/users/{id}:
+    get:
+      tags: [Utilisateurs]
+      summary: Profil public (compétences + solde)
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: Profil
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "404": { $ref: "#/components/responses/Erreur" }
+    put:
+      tags: [Utilisateurs]
+      summary: Modifier son profil
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserInput" }
+      responses:
+        "200":
+          description: Profil mis à jour
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/Erreur" }
+        "403": { $ref: "#/components/responses/Erreur" }
+        "404": { $ref: "#/components/responses/Erreur" }
+
+  /api/users/{id}/skills:
+    get:
+      tags: [Utilisateurs]
+      summary: Compétences d'un utilisateur
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: Liste des compétences
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Skill" }
+        "404": { $ref: "#/components/responses/Erreur" }
+    put:
+      tags: [Utilisateurs]
+      summary: Définir ses compétences (écrase la liste)
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/Skill" }
+            example:
+              - { nom: "Cuisine", niveau: "expert" }
+      responses:
+        "200":
+          description: Compétences enregistrées
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Skill" }
+        "400": { $ref: "#/components/responses/Erreur" }
+        "403": { $ref: "#/components/responses/Erreur" }
+
+  /api/users/{id}/reviews:
+    get:
+      tags: [Évaluations]
+      summary: Avis reçus par un utilisateur
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: Liste des avis
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Review" }
+
+  /api/users/{id}/stats:
+    get:
+      tags: [Utilisateurs]
+      summary: Tableau de bord d'un utilisateur
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: Statistiques
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserStats" }
+        "404": { $ref: "#/components/responses/Erreur" }
+
+  /api/services:
+    get:
+      tags: [Services]
+      summary: Catalogue des services actifs (filtres serveur)
+      parameters:
+        - { name: categorie, in: query, schema: { type: string }, example: Cuisine }
+        - { name: ville, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Liste des services
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Service" }
+    post:
+      tags: [Services]
+      summary: Publier une annonce (compétence requise dans la catégorie)
+      parameters: [{ $ref: "#/components/parameters/UserIdHeader" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceInput" }
+      responses:
+        "201":
+          description: Annonce créée
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Service" }
+        "400": { $ref: "#/components/responses/Erreur" }
+
+  /api/services/{id}:
+    get:
+      tags: [Services]
+      summary: Détail d'une annonce
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: Service
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Service" }
+        "404": { $ref: "#/components/responses/Erreur" }
+    put:
+      tags: [Services]
+      summary: Modifier son annonce
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceInput" }
+      responses:
+        "200":
+          description: Annonce mise à jour
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Service" }
+        "400": { $ref: "#/components/responses/Erreur" }
+        "403": { $ref: "#/components/responses/Erreur" }
+        "404": { $ref: "#/components/responses/Erreur" }
+    delete:
+      tags: [Services]
+      summary: Supprimer son annonce
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      responses:
+        "200": { description: Annonce supprimée }
+        "403": { $ref: "#/components/responses/Erreur" }
+        "404": { $ref: "#/components/responses/Erreur" }
+
+  /api/services/{id}/reviews:
+    get:
+      tags: [Évaluations]
+      summary: Avis portant sur un service
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: Liste des avis
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Review" }
+        "404": { $ref: "#/components/responses/Erreur" }
+
+  /api/exchanges:
+    post:
+      tags: [Échanges]
+      summary: Demander un échange sur un service
+      parameters: [{ $ref: "#/components/parameters/UserIdHeader" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service_id: { type: integer, example: 1 }
+      responses:
+        "201":
+          description: Demande créée (statut pending)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exchange" }
+        "400": { $ref: "#/components/responses/Erreur" }
+        "409": { $ref: "#/components/responses/Erreur" }
+    get:
+      tags: [Échanges]
+      summary: Ses échanges (demandés + reçus)
+      parameters:
+        - { $ref: "#/components/parameters/UserIdHeader" }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, accepted, rejected, cancelled, completed]
+      responses:
+        "200":
+          description: Liste des échanges
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Exchange" }
+        "400": { $ref: "#/components/responses/Erreur" }
+
+  /api/exchanges/{id}:
+    get:
+      tags: [Échanges]
+      summary: Détail d'un échange (réservé aux parties)
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      responses:
+        "200":
+          description: Échange
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exchange" }
+        "403": { $ref: "#/components/responses/Erreur" }
+        "404": { $ref: "#/components/responses/Erreur" }
+
+  /api/exchanges/{id}/accept:
+    put:
+      tags: [Échanges]
+      summary: Accepter (offreur) — bloque les crédits du demandeur
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      responses:
+        "200":
+          description: Échange accepté
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exchange" }
+        "403": { $ref: "#/components/responses/Erreur" }
+        "409": { $ref: "#/components/responses/Erreur" }
+
+  /api/exchanges/{id}/reject:
+    put:
+      tags: [Échanges]
+      summary: Refuser (offreur) une demande en attente
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      responses:
+        "200":
+          description: Échange refusé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exchange" }
+        "403": { $ref: "#/components/responses/Erreur" }
+        "409": { $ref: "#/components/responses/Erreur" }
+
+  /api/exchanges/{id}/complete:
+    put:
+      tags: [Échanges]
+      summary: Terminer — transfère les crédits à l'offreur
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      responses:
+        "200":
+          description: Échange terminé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exchange" }
+        "403": { $ref: "#/components/responses/Erreur" }
+        "409": { $ref: "#/components/responses/Erreur" }
+
+  /api/exchanges/{id}/cancel:
+    put:
+      tags: [Échanges]
+      summary: Annuler — restitue les crédits bloqués
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      responses:
+        "200":
+          description: Échange annulé
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exchange" }
+        "403": { $ref: "#/components/responses/Erreur" }
+        "409": { $ref: "#/components/responses/Erreur" }
+
+  /api/exchanges/{id}/review:
+    post:
+      tags: [Évaluations]
+      summary: Noter un échange terminé (une seule fois)
+      parameters:
+        - { $ref: "#/components/parameters/IdPath" }
+        - { $ref: "#/components/parameters/UserIdHeader" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: integer, minimum: 1, maximum: 5, example: 5 }
+                commentaire: { type: string, example: "Parfait" }
+      responses:
+        "201":
+          description: Avis enregistré
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Review" }
+        "400": { $ref: "#/components/responses/Erreur" }
+
+components:
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, example: 1 }
+    UserIdHeader:
+      name: X-User-ID
+      in: header
+      required: true
+      description: Identifiant de l'utilisateur courant.
+      schema: { type: integer, example: 1 }
+
+  responses:
+    Erreur:
+      description: Erreur
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+    UserInput:
+      type: object
+      required: [pseudo]
+      properties:
+        pseudo: { type: string, example: alice }
+        bio: { type: string, example: "Jardinière du dimanche" }
+        ville: { type: string, example: Lyon }
+    Skill:
+      type: object
+      properties:
+        nom: { type: string, example: Cuisine }
+        niveau:
+          type: string
+          enum: [débutant, intermédiaire, expert]
+          example: expert
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        pseudo: { type: string }
+        bio: { type: string }
+        ville: { type: string }
+        skills:
+          type: array
+          items: { $ref: "#/components/schemas/Skill" }
+        credit_balance: { type: integer, example: 10 }
+        created_at: { type: string, format: date-time }
+    ServiceInput:
+      type: object
+      required: [titre, categorie, duree_minutes, credits]
+      properties:
+        titre: { type: string, example: "Cours de cuisine" }
+        description: { type: string }
+        categorie:
+          type: string
+          enum: [Informatique, Jardinage, Bricolage, Cuisine, Musique, Langues, Sport, Tutorat, Déménagement, Photographie, Animalier, Couture, Autre]
+          example: Cuisine
+        duree_minutes: { type: integer, example: 90 }
+        credits: { type: integer, example: 3 }
+        ville: { type: string, example: Lyon }
+    Service:
+      type: object
+      properties:
+        id: { type: integer }
+        provider_id: { type: integer }
+        titre: { type: string }
+        description: { type: string }
+        categorie: { type: string }
+        duree_minutes: { type: integer }
+        credits: { type: integer }
+        ville: { type: string }
+        actif: { type: boolean }
+        created_at: { type: string, format: date-time }
+    Exchange:
+      type: object
+      properties:
+        id: { type: integer }
+        service_id: { type: integer }
+        requester_id: { type: integer }
+        owner_id: { type: integer }
+        status:
+          type: string
+          enum: [pending, accepted, rejected, cancelled, completed]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Review:
+      type: object
+      properties:
+        id: { type: integer }
+        exchange_id: { type: integer }
+        author_id: { type: integer }
+        target_id: { type: integer }
+        note: { type: integer, minimum: 1, maximum: 5 }
+        commentaire: { type: string }
+        created_at: { type: string, format: date-time }
+    UserStats:
+      type: object
+      properties:
+        user_id: { type: integer }
+        services_actifs: { type: integer }
+        echanges_completes: { type: integer }
+        credit_balance: { type: integer }
+        note_moyenne: { type: number, format: float }
+        nb_avis: { type: integer }
+        total_gagne: { type: integer }
+        total_depense: { type: integer }
