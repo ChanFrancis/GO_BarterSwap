@@ -58,12 +58,17 @@ func (s *Store) UpdateService(ctx context.Context, id, callerID int, in bartersw
 	return s.FetchService(ctx, id)
 }
 
-// DeleteService supprime une annonce ; seul le propriétaire y est autorisé.
+// DeleteService archive une annonce en la passant en inactif ; seul le
+// propriétaire y est autorisé. On évite ici la suppression physique : un
+// service ayant un historique d'échange porte des transactions de crédits
+// (credit_transactions.exchange_id est en RESTRICT), et l'effacer en base
+// lèverait une violation de clé étrangère. Le soft-delete préserve l'historique
+// tout en retirant l'annonce des recherches (ListServices filtre actif = true).
 func (s *Store) DeleteService(ctx context.Context, id, callerID int) error {
 	if err := s.ensureServiceOwner(ctx, id, callerID); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `DELETE FROM services WHERE id = $1`, id)
+	_, err := s.db.ExecContext(ctx, `UPDATE services SET actif = false WHERE id = $1`, id)
 	return err
 }
 

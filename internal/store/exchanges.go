@@ -30,14 +30,20 @@ func (s *Store) CreateExchange(ctx context.Context, requesterID, serviceID int) 
 	defer tx.Rollback()
 
 	var providerID, credits int
+	var actif bool
 	err = tx.QueryRowContext(ctx,
-		`SELECT provider_id, credits FROM services WHERE id = $1 FOR UPDATE`, serviceID).
-		Scan(&providerID, &credits)
+		`SELECT provider_id, credits, actif FROM services WHERE id = $1 FOR UPDATE`, serviceID).
+		Scan(&providerID, &credits, &actif)
 	if errors.Is(err, sql.ErrNoRows) {
 		return barterswap.Exchange{}, barterswap.ErrIntrouvable
 	}
 	if err != nil {
 		return barterswap.Exchange{}, err
+	}
+	// Un service archivé (soft-delete) n'est plus réservable : il apparaît
+	// comme introuvable pour les autres utilisateurs.
+	if !actif {
+		return barterswap.Exchange{}, barterswap.ErrIntrouvable
 	}
 	if providerID == requesterID {
 		return barterswap.Exchange{}, barterswap.ErrServicePropre

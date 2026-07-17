@@ -188,3 +188,47 @@ func TestIntegrationParcoursComplet(t *testing.T) {
 	c.mustStatus(c.do(http.MethodGet, "/api/services/1/reviews", "", 0),
 		http.StatusOK, "avis du service 1")
 }
+
+// TestIntegrationSoftDeleteService vérifie que l'archivage d'un service ayant
+// un historique d'échange ne lève pas d'erreur 500 (la suppression est logique,
+// pas physique) et qu'un service archivé disparaît des annonces et n'est plus
+// réservable.
+func TestIntegrationSoftDeleteService(t *testing.T) {
+	c := newTestClient(t)
+
+	// alice=1 publie un service, bob=2 le réserve et alice accepte : des
+	// transactions de crédits sont alors liées à l'échange.
+	c.mustStatus(c.do(http.MethodPost, "/api/users", `{"pseudo":"alice"}`, 0),
+		http.StatusCreated, "user alice")
+	c.mustStatus(c.do(http.MethodPost, "/api/users", `{"pseudo":"bob"}`, 0),
+		http.StatusCreated, "user bob")
+	c.mustStatus(c.do(http.MethodPut, "/api/users/1/skills",
+		`[{"nom":"Musique","niveau":"expert"}]`, 1), http.StatusOK, "skills alice")
+	c.mustStatus(c.do(http.MethodPost, "/api/services",
+		`{"titre":"Cours de piano","categorie":"Musique","duree_minutes":60,"credits":2}`, 1),
+		http.StatusCreated, "service 1")
+	c.mustStatus(c.do(http.MethodPost, "/api/exchanges", `{"service_id":1}`, 2),
+		http.StatusCreated, "échange 1")
+	c.mustStatus(c.do(http.MethodPut, "/api/exchanges/1/accept", "", 1),
+		http.StatusOK, "accept")
+
+	// Archivage du service : aucune 500 (la suppression physique aurait
+	// levé une violation de clé étrangère sur credit_transactions).
+	c.mustStatus(c.do(http.MethodDelete, "/api/services/1", "", 1),
+		http.StatusOK, "archivage service")
+
+	// Le service n'apparaît plus dans les annonces actives.
+	rec := c.do(http.MethodGet, "/api/services", "", 0)
+	c.mustStatus(rec, http.StatusOK, "liste services")
+	var list []barterswap.Service
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatalf("décodage liste : %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("service archivé encore listé : %+v", list)
+	}
+
+	// Un service archivé n'est plus réservable (404 = introuvable).
+	c.mustStatus(c.do(http.MethodPost, "/api/exchanges", `{"service_id":1}`, 2),
+		http.StatusNotFound, "échange sur service archivé")
+}
