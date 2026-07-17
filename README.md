@@ -91,11 +91,14 @@ compétence de même nom.
 ## Exemples d'utilisation
 
 ```bash
-# Créer un compte (10 crédits de bienvenue attribués automatiquement)
+# Créer deux comptes (10 crédits de bienvenue attribués automatiquement) :
+# alice (id 1), l'offreuse, et bob (id 2), le demandeur.
 curl -X POST http://localhost:8080/api/users \
-  -d '{"pseudo":"alice","bio":"Jardinière du dimanche","ville":"Paris"}'
+  -d '{"pseudo":"alice","bio":"Jardinière du dimanche","ville":"Lyon"}'
+curl -X POST http://localhost:8080/api/users \
+  -d '{"pseudo":"bob","ville":"Lyon"}'
 
-# Définir ses compétences (niveaux : débutant, intermédiaire, expert)
+# Alice déclare ses compétences (niveaux : débutant, intermédiaire, expert)
 curl -X PUT http://localhost:8080/api/users/1/skills \
   -H "X-User-ID: 1" \
   -d '[{"nom":"Jardinage","niveau":"expert"},{"nom":"Cuisine","niveau":"débutant"}]'
@@ -103,19 +106,19 @@ curl -X PUT http://localhost:8080/api/users/1/skills \
 # Consulter un profil (compétences + solde de crédits)
 curl http://localhost:8080/api/users/1
 
-# Publier un service (nécessite une compétence dans la catégorie)
+# Alice publie un service dans une catégorie où elle a une compétence
 curl -X POST http://localhost:8080/api/services \
   -H "X-User-ID: 1" \
-  -d '{"titre":"Cours de piano","categorie":"Musique","duree_minutes":60,"credits":2,"ville":"Lyon"}'
+  -d '{"titre":"Cours de cuisine","categorie":"Cuisine","duree_minutes":60,"credits":2,"ville":"Lyon"}'
 
 # Rechercher des services
-curl "http://localhost:8080/api/services?categorie=Musique&search=piano"
+curl "http://localhost:8080/api/services?categorie=Cuisine&search=cuisine"
 
-# Demander un échange, puis l'offreur l'accepte (crédits bloqués)
+# Bob demande un échange, puis alice (l'offreuse) l'accepte (crédits bloqués)
 curl -X POST http://localhost:8080/api/exchanges -H "X-User-ID: 2" -d '{"service_id":1}'
 curl -X PUT http://localhost:8080/api/exchanges/1/accept -H "X-User-ID: 1"
 
-# Terminer l'échange (crédits transférés à l'offreur)
+# Terminer l'échange (crédits transférés à alice)
 curl -X PUT http://localhost:8080/api/exchanges/1/complete -H "X-User-ID: 2"
 ```
 
@@ -135,17 +138,31 @@ docker compose down -v && docker compose up --build -d
 Tests unitaires (validations, routage) sans base :
 
 ```bash
+# Avec Go installé localement
 go test -v -cover ./...
+
+# Sans Go, via Docker (comme le reste du projet)
+docker run --rm -u "$(id -u):$(id -g)" -e GOCACHE=/tmp/gocache -e GOPATH=/tmp/gopath \
+  -v "$PWD":/app -w /app golang:1.26 go test -v -cover ./...
 ```
 
 Tests d'intégration (parcours complet sur une vraie base) : ils se sautent
 si `TEST_DATABASE_URL` n'est pas défini. Exemple avec Docker :
 
 ```bash
+# Avec Go installé localement
 docker run -d --name pg -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test \
   -e POSTGRES_DB=test -p 55432:5432 postgres:17
 TEST_DATABASE_URL="postgres://test:test@localhost:55432/test?sslmode=disable" \
   go test -cover ./...
+
+# Sans Go, tests unitaires + intégration entièrement via Docker
+docker run -d --name pg -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test \
+  -e POSTGRES_DB=test postgres:17
+docker run --rm -u "$(id -u):$(id -g)" -e GOCACHE=/tmp/gocache -e GOPATH=/tmp/gopath \
+  --link pg -e TEST_DATABASE_URL="postgres://test:test@pg:5432/test?sslmode=disable" \
+  -v "$PWD":/app -w /app golang:1.26 go test -v -cover ./...
+docker rm -f pg
 ```
 
 La CI GitHub Actions exécute ces tests contre un service PostgreSQL et

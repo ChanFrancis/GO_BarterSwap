@@ -21,15 +21,15 @@ const (
 	StatusCompleted = "completed"
 )
 
-var statutsExchange = []string{
+var validStatuses = []string{
 	StatusPending, StatusAccepted, StatusRejected, StatusCancelled, StatusCompleted,
 }
 
 // Niveaux de compétence acceptés.
-var niveauxValides = []string{"débutant", "intermédiaire", "expert"}
+var validLevels = []string{"débutant", "intermédiaire", "expert"}
 
 // Catégories de service acceptées (liste fermée du sujet).
-var categoriesValides = []string{
+var validCategories = []string{
 	"Informatique", "Jardinage", "Bricolage", "Cuisine", "Musique",
 	"Langues", "Sport", "Tutorat", "Déménagement", "Photographie",
 	"Animalier", "Couture", "Autre",
@@ -63,9 +63,9 @@ func ValidateSkills(skills []Skill) error {
 		if strings.TrimSpace(s.Nom) == "" {
 			return ValidationError{"le nom d'une compétence est obligatoire"}
 		}
-		if !contient(niveauxValides, s.Niveau) {
+		if !contains(validLevels, s.Niveau) {
 			return ValidationError{fmt.Sprintf(
-				"niveau %q invalide (attendu : %s)", s.Niveau, strings.Join(niveauxValides, ", "))}
+				"niveau %q invalide (attendu : %s)", s.Niveau, strings.Join(validLevels, ", "))}
 		}
 	}
 	return nil
@@ -80,9 +80,9 @@ func ValidateService(in ServiceInput) error {
 	if len([]rune(in.Titre)) > 120 {
 		return ValidationError{"le titre ne doit pas dépasser 120 caractères"}
 	}
-	if !contient(categoriesValides, in.Categorie) {
+	if !contains(validCategories, in.Categorie) {
 		return ValidationError{fmt.Sprintf(
-			"catégorie %q invalide (attendu : %s)", in.Categorie, strings.Join(categoriesValides, ", "))}
+			"catégorie %q invalide (attendu : %s)", in.Categorie, strings.Join(validCategories, ", "))}
 	}
 	if in.DureeMinutes <= 0 {
 		return ValidationError{"la durée doit être supérieure à zéro"}
@@ -103,12 +103,12 @@ func ValidateNote(note int) error {
 
 // ValidStatus indique si une valeur de filtre ?status= est reconnue.
 func ValidStatus(s string) bool {
-	return contient(statutsExchange, s)
+	return contains(validStatuses, s)
 }
 
-func contient(liste []string, valeur string) bool {
-	for _, v := range liste {
-		if v == valeur {
+func contains(list []string, value string) bool {
+	for _, v := range list {
+		if v == value {
 			return true
 		}
 	}

@@ -43,7 +43,9 @@ CREATE TABLE IF NOT EXISTS exchanges (
 CREATE TABLE IF NOT EXISTS credit_transactions (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    exchange_id INT REFERENCES exchanges (id),
+    -- ON DELETE SET NULL : supprimer un échange (ou le service parent) ne doit
+    -- pas effacer les écritures du journal, sinon les soldes seraient faussés.
+    exchange_id INT REFERENCES exchanges (id) ON DELETE SET NULL,
     montant INT NOT NULL,
     type TEXT NOT NULL, -- earn, spend, refund
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()

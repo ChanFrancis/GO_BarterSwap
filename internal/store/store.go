@@ -49,9 +49,9 @@ type rowQuerier interface {
 
 // balance calcule le solde comme la somme du journal de transactions.
 func balance(ctx context.Context, q rowQuerier, userID int) (int, error) {
-	var solde int
+	var total int
 	err := q.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(montant), 0) FROM credit_transactions WHERE user_id = $1`,
-		userID).Scan(&solde)
-	return solde, err
+		userID).Scan(&total)
+	return total, err
 }

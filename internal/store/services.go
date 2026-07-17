@@ -48,7 +48,16 @@ func (s *Store) UpdateService(ctx context.Context, id, callerID int, in bartersw
 	if err := s.ensureServiceOwner(ctx, id, callerID); err != nil {
 		return barterswap.Service{}, err
 	}
-	_, err := s.db.ExecContext(ctx,
+	// Même règle qu'à la publication : on ne peut basculer une annonce que
+	// vers une catégorie où l'on a déclaré une compétence.
+	hasSkill, err := s.UserHasSkill(ctx, callerID, in.Categorie)
+	if err != nil {
+		return barterswap.Service{}, err
+	}
+	if !hasSkill {
+		return barterswap.Service{}, barterswap.ErrCompetenceManquante
+	}
+	_, err = s.db.ExecContext(ctx,
 		`UPDATE services SET titre = $1, description = $2, categorie = $3,
 		 duree_minutes = $4, credits = $5, ville = $6 WHERE id = $7`,
 		in.Titre, in.Description, in.Categorie, in.DureeMinutes, in.Credits, in.Ville, id)

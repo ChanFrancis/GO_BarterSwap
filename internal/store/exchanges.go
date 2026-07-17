@@ -50,22 +50,22 @@ func (s *Store) CreateExchange(ctx context.Context, requesterID, serviceID int) 
 	}
 
 	// Un service ne peut avoir qu'un seul échange pending ou accepted.
-	var enCours bool
+	var inProgress bool
 	err = tx.QueryRowContext(ctx,
 		`SELECT EXISTS (SELECT 1 FROM exchanges WHERE service_id = $1 AND status IN ($2, $3))`,
-		serviceID, barterswap.StatusPending, barterswap.StatusAccepted).Scan(&enCours)
+		serviceID, barterswap.StatusPending, barterswap.StatusAccepted).Scan(&inProgress)
 	if err != nil {
 		return barterswap.Exchange{}, err
 	}
-	if enCours {
+	if inProgress {
 		return barterswap.Exchange{}, barterswap.ErrDejaReserve
 	}
 
-	solde, err := balance(ctx, tx, requesterID)
+	total, err := balance(ctx, tx, requesterID)
 	if err != nil {
 		return barterswap.Exchange{}, err
 	}
-	if solde < credits {
+	if total < credits {
 		return barterswap.Exchange{}, barterswap.ErrCreditsInsuffisants
 	}
 
@@ -95,11 +95,11 @@ func (s *Store) AcceptExchange(ctx context.Context, id, callerID int) (barterswa
 		if _, err := tx.ExecContext(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, e.RequesterID); err != nil {
 			return err
 		}
-		solde, err := balance(ctx, tx, e.RequesterID)
+		total, err := balance(ctx, tx, e.RequesterID)
 		if err != nil {
 			return err
 		}
-		if solde < e.credits {
+		if total < e.credits {
 			return barterswap.ErrCreditsInsuffisants
 		}
 		if err := setExchangeStatus(ctx, tx, id, barterswap.StatusAccepted); err != nil {

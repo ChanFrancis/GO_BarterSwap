@@ -187,6 +187,20 @@ func TestIntegrationParcoursComplet(t *testing.T) {
 		http.StatusOK, "avis reçus par bob")
 	c.mustStatus(c.do(http.MethodGet, "/api/services/1/reviews", "", 0),
 		http.StatusOK, "avis du service 1")
+
+	// Régression : modifier une annonce vers une catégorie sans compétence
+	// est refusé, comme à la publication (bob n'a que la compétence Cuisine).
+	c.mustStatus(c.do(http.MethodPut, "/api/services/1",
+		`{"titre":"Dépannage","categorie":"Informatique","duree_minutes":30,"credits":1}`, 2),
+		http.StatusBadRequest, "modification vers une catégorie sans compétence")
+
+	// Régression : supprimer un service qui a déjà eu un échange complété doit
+	// réussir, et le journal de crédits (donc le solde de bob) rester intact.
+	c.mustStatus(c.do(http.MethodDelete, "/api/services/1", "", 2),
+		http.StatusOK, "suppression d'un service avec historique d'échange")
+	if got := c.balance(2); got != 13 {
+		t.Fatalf("après suppression du service, solde bob doit rester 13, reçu %d", got)
+	}
 }
 
 // TestIntegrationSoftDeleteService vérifie que l'archivage d'un service ayant
